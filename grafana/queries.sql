@@ -50,5 +50,5 @@ ORDER BY r.created_at DESC
 LIMIT 20;
 
 -- Retention: delete results older than 90 days (run manually or schedule
--- it; Neon's free tier holds months-to-years of daily runs regardless)
+-- it; the free tier holds months-to-years of daily runs regardless)
 DELETE FROM results WHERE created_at < now() - interval '90 days';

@@ -15,21 +15,19 @@ function tokenEquals(token: string | null, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** REST + MCP auth: `Authorization: Bearer <APP_API_KEY>`. */
+/** REST + MCP auth: `Authorization: Bearer <your secret>`. */
 export function isApiKeyAuthorized(req: Request): boolean {
-  return tokenEquals(bearerToken(req), env.appApiKey);
+  return tokenEquals(bearerToken(req), env.apiToken);
 }
 
 /**
  * Cron auth: Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`
- * automatically; the deployer's APP_API_KEY is accepted too so a tick can
- * be triggered manually.
+ * automatically. The API token is accepted too, so a tick can be
+ * triggered by hand — and so a single-secret setup works either way.
  */
 export function isCronAuthorized(req: Request): boolean {
   const token = bearerToken(req);
-  return (
-    tokenEquals(token, env.cronSecret) || tokenEquals(token, env.appApiKey)
-  );
+  return tokenEquals(token, env.cronSecret) || tokenEquals(token, env.apiToken);
 }
 
 export function unauthorized(): Response {

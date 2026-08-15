@@ -5,20 +5,35 @@ import { env } from "./env";
 const TIMESTAMP_TOLERANCE_SECONDS = 5 * 60;
 
 /**
- * Callback URL passed to cloro on task submission. The token query param is
- * what authenticates incoming deliveries (same trust level as the cron
- * endpoint). Null when the deployment has no public URL (local dev) — the
- * cron sweep then picks results up by polling instead.
+ * Token embedded in the webhook callback URL, derived from the secret
+ * rather than being the secret itself.
+ *
+ * The callback URL is handed to a third party and stored on their side, so
+ * it must not carry anything that grants API access — the same secret may
+ * well be the API token in a single-secret deployment. This derived value
+ * only lets the holder complete a task result.
+ */
+function webhookToken(): string {
+  return createHmac("sha256", env.cronSecret)
+    .update("geo-tracker:webhook")
+    .digest("hex")
+    .slice(0, 32);
+}
+
+/**
+ * Callback URL passed to cloro on task submission. Null when the
+ * deployment has no public URL (local dev) — the cron sweep then picks
+ * results up by polling instead.
  */
 export function webhookCallbackUrl(): string | null {
   const base = env.appUrl;
   if (!base) return null;
-  return `${base}/api/webhook?token=${encodeURIComponent(env.cronSecret)}`;
+  return `${base}/api/webhook?token=${webhookToken()}`;
 }
 
 export function verifyWebhookToken(token: string | null): boolean {
   if (!token) return false;
-  const expected = Buffer.from(env.cronSecret);
+  const expected = Buffer.from(webhookToken());
   const actual = Buffer.from(token);
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }

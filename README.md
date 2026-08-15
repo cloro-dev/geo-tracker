@@ -11,7 +11,7 @@ every raw response in your own Postgres, and gives you a small REST API
 plus an MCP endpoint to analyze the data with Claude, Cursor, or anything
 else that speaks MCP.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker&env=CLORO_API_KEY,APP_API_KEY,CRON_SECRET&envDescription=CLORO_API_KEY%3A%20sign%20up%20at%20cloro.dev%20to%20get%20a%20free%20API%20key.%20APP_API_KEY%20and%20CRON_SECRET%3A%20any%20two%20random%20strings%20you%20choose%2C%20e.g.%20from%20openssl%20rand%20-hex%2032.&envLink=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker%23environment-variables&project-name=geo-tracker&repository-name=geo-tracker&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker&env=CLORO_API_KEY,CRON_SECRET&envDescription=CLORO_API_KEY%3A%20sign%20up%20at%20cloro.dev%20to%20get%20a%20free%20API%20key.%20CRON_SECRET%3A%20any%20random%20string%20you%20choose%2C%20e.g.%20from%20openssl%20rand%20-hex%2032.&envLink=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker%23environment-variables&project-name=geo-tracker&repository-name=geo-tracker&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
 
 - **No dashboard, no UI** — the MCP endpoint and the
   [Grafana starter](./grafana/README.md) are the analysis layer.
@@ -34,14 +34,19 @@ cloro finishes the scrape ──────────┴──► POST /api/w
 Sign up at [cloro.dev](https://cloro.dev) and copy your API key. This is the
 only paid part — it pays for the scrapes.
 
-### 2. Generate two secrets
+### 2. Generate one secret
 
-You invent these; they are not issued by anyone:
+You invent this; it is not issued by anyone:
 
 ```bash
-openssl rand -hex 32   # APP_API_KEY  — the token you send to your own API
-openssl rand -hex 32   # CRON_SECRET  — protects /api/cron and the webhook
+openssl rand -hex 32
 ```
+
+This single value protects the whole deployment: it is the bearer token
+you send to your own API and MCP endpoint, the scheduler authenticates
+with it, and the webhook token is derived from it. It is named
+`CRON_SECRET` because Vercel's scheduler can only authenticate through a
+variable with that exact name.
 
 ### 3. Click Deploy and walk through Vercel
 
@@ -52,19 +57,18 @@ database, and deploys. Vercel asks for four things, in this order:
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | **New Project**            | Pick your **Git Scope** (your GitHub account) and a repository name. The clone is private by default. Click **Create**. |
 | **Add Products → Storage** | Click **Add** next to the Postgres database, keep the defaults, and choose the **Free** plan.                           |
-| **Add Environment Vars**   | Fill the three values from the table below.                                                                             |
+| **Add Environment Vars**   | Fill the two values from the table below.                                                                               |
 | **Deploy**                 | Click it. The build takes about a minute, then your app is live.                                                        |
 
 You are **not** asked for a database URL — Vercel's default Postgres sets
 `DATABASE_URL` for you, already pooled.
 
-What to paste into the three fields:
+What to paste into the two fields:
 
 | Field           | Value                                         |
 | --------------- | --------------------------------------------- |
 | `CLORO_API_KEY` | Your key from step 1 (starts with `sk_live_`) |
-| `APP_API_KEY`   | The first secret from step 2                  |
-| `CRON_SECRET`   | The second secret from step 2                 |
+| `CRON_SECRET`   | The secret from step 2                        |
 
 ### 4. Create the tables
 
@@ -84,7 +88,7 @@ This creates the two tables (`prompts`, `results`). You only do it once.
 
 ```bash
 curl -X POST https://<your-app>.vercel.app/api/prompts \
-  -H "Authorization: Bearer $APP_API_KEY" \
+  -H "Authorization: Bearer $CRON_SECRET" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "best crm tools",
@@ -101,7 +105,7 @@ Instead of waiting for the schedule:
 
 ```bash
 curl -X POST https://<your-app>.vercel.app/api/prompts/<id>/run \
-  -H "Authorization: Bearer $APP_API_KEY"
+  -H "Authorization: Bearer $CRON_SECRET"
 ```
 
 The call returns immediately with pending task ids; results land in your
@@ -114,20 +118,20 @@ minutes). Check them with `GET /api/results`.
 
 ## Environment variables
 
-| Variable               | Required | Purpose                                                                                                         |
-| ---------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
-| `CLORO_API_KEY`        | yes      | Your cloro API key — pays for the scrapes                                                                       |
-| `DATABASE_URL`         | yes      | Postgres connection string. Set for you by Vercel's database; supply it yourself only on other hosts            |
-| `APP_API_KEY`          | yes      | Bearer token clients must send to use the REST API and MCP endpoint                                             |
-| `CRON_SECRET`          | yes      | Protects `/api/cron` and the webhook callback URL; Vercel Cron sends it automatically                           |
-| `APP_URL`              | no       | Public base URL for the webhook callback. Derived from `VERCEL_PROJECT_PRODUCTION_URL` on Vercel; set elsewhere |
-| `CLORO_WEBHOOK_SECRET` | no       | Verify cloro's `X-Cloro-Signature` webhook signatures (if your cloro org has signing enabled)                   |
-| `CLORO_API_URL`        | no       | Override the cloro API base URL (default `https://api.cloro.dev`)                                               |
+| Variable               | Required | Purpose                                                                                                           |
+| ---------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `CLORO_API_KEY`        | yes      | Your cloro API key — pays for the scrapes                                                                         |
+| `DATABASE_URL`         | yes      | Postgres connection string. Set for you by Vercel's database; supply it yourself only on other hosts              |
+| `CRON_SECRET`          | yes      | The one secret: bearer token for the REST API and MCP, sent automatically by Vercel Cron, seeds the webhook token |
+| `APP_API_KEY`          | no       | Set only if you want the API token to differ from the cron secret; replaces `CRON_SECRET` for REST and MCP auth   |
+| `APP_URL`              | no       | Public base URL for the webhook callback. Derived from `VERCEL_PROJECT_PRODUCTION_URL` on Vercel; set elsewhere   |
+| `CLORO_WEBHOOK_SECRET` | no       | Verify cloro's `X-Cloro-Signature` webhook signatures (if your cloro org has signing enabled)                     |
+| `CLORO_API_URL`        | no       | Override the cloro API base URL (default `https://api.cloro.dev`)                                                 |
 
 ## API
 
 All endpoints except the webhook require
-`Authorization: Bearer <APP_API_KEY>`.
+`Authorization: Bearer <CRON_SECRET>` — your secret from step 2.
 
 | Method   | Path                   | Description                                                                         |
 | -------- | ---------------------- | ----------------------------------------------------------------------------------- |
@@ -138,7 +142,7 @@ All endpoints except the webhook require
 | `DELETE` | `/api/prompts/:id`     | Delete a prompt and (cascade) its results                                           |
 | `POST`   | `/api/prompts/:id/run` | Submit the prompt to its engines now; returns pending task ids (202)                |
 | `GET`    | `/api/results`         | Query results (filters below)                                                       |
-| `GET`    | `/api/cron`            | Scheduler tick — auth via `CRON_SECRET` (or `APP_API_KEY`)                          |
+| `GET`    | `/api/cron`            | Scheduler tick — same bearer token                                                  |
 | `POST`   | `/api/webhook`         | cloro result callback — auth via token in the callback URL                          |
 | `*`      | `/api/mcp`             | MCP endpoint (Streamable HTTP)                                                      |
 
@@ -161,7 +165,7 @@ Claude Code:
 ```bash
 claude mcp add --transport http geo-tracker \
   https://<your-app>.vercel.app/api/mcp \
-  --header "Authorization: Bearer <APP_API_KEY>"
+  --header "Authorization: Bearer <CRON_SECRET>"
 ```
 
 Claude Desktop / Cursor (`mcpServers` config):
@@ -171,7 +175,7 @@ Claude Desktop / Cursor (`mcpServers` config):
   "geo-tracker": {
     "url": "https://<your-app>.vercel.app/api/mcp",
     "headers": {
-      "Authorization": "Bearer <APP_API_KEY>"
+      "Authorization": "Bearer <CRON_SECRET>"
     }
   }
 }
@@ -196,7 +200,7 @@ how often something calls it:
    secret to activate it.
 3. **Any scheduler** — e.g. [cron-job.org](https://cron-job.org):
    `GET https://<your-app>.vercel.app/api/cron` with header
-   `Authorization: Bearer <CRON_SECRET>`.
+   `Authorization: Bearer <CRON_SECRET>` — your secret from step 2.
 
 The same tick also sweeps: pending results whose webhook was missed are
 polled from the cloro API and backfilled, so nothing is lost if a webhook

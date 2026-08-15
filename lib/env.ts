@@ -20,11 +20,20 @@ export const env = {
   get databaseUrl(): string {
     return required("DATABASE_URL");
   },
-  get appApiKey(): string {
-    return required("APP_API_KEY");
+  /**
+   * The bearer token clients send to the REST API and the MCP endpoint.
+   *
+   * One secret is enough for a whole deployment: Vercel Cron can only
+   * authenticate itself through a variable literally named `CRON_SECRET`,
+   * so that is the one we ask for, and it doubles as the API token. Set
+   * `APP_API_KEY` as well if you would rather the two be separate.
+   */
+  get apiToken(): string {
+    return process.env.APP_API_KEY ?? required("CRON_SECRET");
   },
+  /** Secret Vercel Cron sends, and the seed for the webhook token. */
   get cronSecret(): string {
-    return required("CRON_SECRET");
+    return process.env.CRON_SECRET ?? required("APP_API_KEY");
   },
   /**
    * Public base URL of this deployment, used to build the webhook callback
