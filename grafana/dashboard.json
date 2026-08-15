@@ -1,0 +1,168 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_POSTGRES",
+      "label": "Postgres",
+      "description": "The Postgres database geo-tracker writes to",
+      "type": "datasource",
+      "pluginId": "grafana-postgresql-datasource",
+      "pluginName": "PostgreSQL"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "datasource",
+      "id": "grafana-postgresql-datasource",
+      "name": "PostgreSQL",
+      "version": "1.0.0"
+    }
+  ],
+  "annotations": { "list": [] },
+  "editable": true,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Completed runs (24h)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS runs FROM results WHERE status = 'completed' AND created_at > now() - interval '24 hours';"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Success rate (24h)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE status = 'completed') / greatest(count(*) FILTER (WHERE status IN ('completed', 'failed')), 1), 1) AS success_rate FROM results WHERE created_at > now() - interval '24 hours';"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Credits used (7d)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 0 },
+      "id": 3,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT coalesce(sum(credits_charged), 0) AS credits FROM results WHERE created_at > now() - interval '7 days';"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Runs per day by engine",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 5 },
+      "id": 4,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(created_at, '1d'), engine AS metric, count(*) AS value FROM results WHERE $__timeFilter(created_at) GROUP BY 1, 2 ORDER BY 1;"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Credits per day",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 5 },
+      "id": 5,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(created_at, '1d'), sum(credits_charged) AS credits FROM results WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1;"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Recent failures",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 14 },
+      "id": 6,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT p.name, r.engine, r.error, r.created_at FROM results r JOIN prompts p ON p.id = r.prompt_id WHERE r.status = 'failed' ORDER BY r.created_at DESC LIMIT 20;"
+        }
+      ]
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["geo-tracker"],
+  "templating": { "list": [] },
+  "time": { "from": "now-7d", "to": "now" },
+  "timezone": "",
+  "title": "geo-tracker",
+  "uid": null,
+  "version": 1
+}

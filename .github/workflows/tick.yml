@@ -1,0 +1,28 @@
+# Hourly scheduler tick. Vercel's built-in cron (vercel.json) fires roughly
+# once per day on the Hobby plan; this workflow adds hourly ticks so
+# runsPerDay > 1 is honored, for free.
+#
+# Setup (repository Settings):
+#   - Variable  TRACKER_URL  = https://<your-app>.vercel.app
+#   - Secret    CRON_SECRET  = same value as the CRON_SECRET env var
+#
+# Note: while this project lives inside a monorepo folder, GitHub ignores
+# this file (workflows only run from the repository root .github/). It
+# activates automatically once geo-tracker is its own repository.
+
+name: Scheduler tick
+
+on:
+  schedule:
+    - cron: "5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger due prompts
+        run: |
+          curl -fsS \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.TRACKER_URL }}/api/cron"
