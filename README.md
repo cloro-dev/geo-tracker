@@ -1,8 +1,8 @@
 # geo-tracker
 
-**Self-hosted GEO (Generative Engine Optimization) tracker. Schedule
-prompts across AI engines, store every answer in your own Postgres.
-Your prompts, your data.**
+**Self-hosted GEO (Generative Engine Optimization) + SEO tracker.
+Schedule prompts across the AI engines and Google Search, store every
+answer in your own Postgres. Your prompts, your data.**
 
 Configure prompts once; geo-tracker runs them on a schedule against
 ChatGPT, Gemini, Copilot, Perplexity, Grok, Google AI Mode, Google Search
