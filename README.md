@@ -227,10 +227,24 @@ so just hit `/api/cron` again after a scrape completes.
 ## Data & retention
 
 Two tables: `prompts` and `results`. Each run stores one row per engine
-with the full raw cloro response as `jsonb` (typically a few KB). The free
-tier's 0.5 GB comfortably holds months to years of daily runs; when you
-want to trim, there's a retention query in
-[`grafana/queries.sql`](./grafana/queries.sql).
+with the full raw cloro response as `jsonb` — measured at **10–30 KB per
+row**, so budget roughly 20 KB per engine per run.
+
+Storage is the limit you hit first, well before anything on Vercel:
+
+| Workload                       | Scrapes/day | Storage/month | 0.5 GB lasts |
+| ------------------------------ | ----------- | ------------- | ------------ |
+| 10 prompts × 3 engines × 1/day | 30          | ~18 MB        | over 2 years |
+| 20 prompts × 4 engines × 4/day | 320         | ~190 MB       | ~3 months    |
+| 50 prompts × 6 engines × 8/day | 2,400       | ~1.4 GB       | ~2 weeks     |
+
+The same workloads use under 1%, 1% and 7% of Vercel's free monthly
+function invocations, so the compute side stays free throughout.
+
+Past light usage, schedule the retention query in
+[`grafana/queries.sql`](./grafana/queries.sql) — deleting results older
+than 90 days keeps any of these workloads inside the free tier
+indefinitely.
 
 ## License
 
