@@ -58,7 +58,7 @@ database, and deploys. Vercel asks for four things, in this order:
 | **New Project**            | Pick your **Git Scope** (your GitHub account) and a repository name. The clone is private by default. Click **Create**. |
 | **Add Products → Storage** | Click **Add** next to the Postgres database, keep the defaults, and choose the **Free** plan.                           |
 | **Add Environment Vars**   | Fill the two values from the table below.                                                                               |
-| **Deploy**                 | Click it. The build takes about a minute, then your app is live.                                                        |
+| **Deploy**                 | Click it. The build creates your tables and goes live in about a minute.                                                |
 
 You are **not** asked for a database URL — Vercel's default Postgres sets
 `DATABASE_URL` for you, already pooled.
@@ -70,21 +70,11 @@ What to paste into the two fields:
 | `CLORO_API_KEY` | Your key from step 1 (starts with `sk_live_`) |
 | `CRON_SECRET`   | The secret from step 2                        |
 
-### 4. Create the tables
+That's it — the two tables (`prompts`, `results`) are created during the
+build, so the app is ready the moment the deploy finishes. There is
+nothing to install locally.
 
-The deploy gives you a running app, but the database is still empty. Clone
-the repo Vercel just made for you and push the schema:
-
-```bash
-git clone https://github.com/<you>/geo-tracker.git && cd geo-tracker
-npm install
-vercel env pull .env          # or copy DATABASE_URL from Settings → Environment Variables
-npx drizzle-kit push
-```
-
-This creates the two tables (`prompts`, `results`). You only do it once.
-
-### 5. Create your first prompt
+### 4. Create your first prompt
 
 ```bash
 curl -X POST https://<your-app>.vercel.app/api/prompts \
@@ -99,7 +89,7 @@ curl -X POST https://<your-app>.vercel.app/api/prompts \
   }'
 ```
 
-### 6. Run it now
+### 5. Run it now
 
 Instead of waiting for the schedule:
 
@@ -220,11 +210,15 @@ docker run -d --name tracker-db -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:1
 
 cp .env.example .env.local   # fill in the values
 pnpm install
-pnpm db:push                 # create the tables
+pnpm db:migrate              # create the tables (also runs on every build)
 pnpm dev
 ```
 
 Trigger a tick: `curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron`.
+
+Changing the schema? Edit `lib/db/schema.ts`, run `pnpm db:generate` to
+write a new migration into `drizzle/`, and commit it — deployments apply
+pending migrations automatically.
 
 Webhooks can't reach localhost — locally, results are picked up by the
 polling sweep on the next cron tick (pending rows older than 10 minutes),
