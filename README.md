@@ -11,7 +11,7 @@ every raw response in your own Postgres, and gives you a small REST API
 plus an MCP endpoint to analyze the data with Claude, Cursor, or anything
 else that speaks MCP.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker&env=CLORO_API_KEY,APP_API_KEY,CRON_SECRET&envDescription=Your%20cloro%20API%20key%20plus%20two%20secrets%20you%20generate&project-name=geo-tracker&repository-name=geo-tracker&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker&env=CLORO_API_KEY,APP_API_KEY,CRON_SECRET&envDescription=CLORO_API_KEY%20comes%20from%20cloro.dev.%20APP_API_KEY%20and%20CRON_SECRET%20are%20secrets%20you%20invent%3A%20run%20openssl%20rand%20-hex%2032%20twice.&envLink=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker%23environment-variables&project-name=geo-tracker&repository-name=geo-tracker&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
 
 - **No dashboard, no UI** — the MCP endpoint and the
   [Grafana starter](./grafana/README.md) are the analysis layer.
@@ -30,52 +30,88 @@ cloro finishes the scrape ──────────┴──► POST /api/w
 
 ## 10-minute quickstart
 
-1. **Get a cloro API key** at [cloro.dev](https://cloro.dev).
-2. **Deploy**: click the button above. Vercel clones the repo and walks you
-   through creating a **Neon** database from its Marketplace — no separate
-   Neon signup, and `DATABASE_URL` is injected for you as a pooled
-   connection string.
-3. **Fill in the three env vars** the form asks for: your `CLORO_API_KEY`,
-   plus two secrets you generate yourself:
+### 1. Get a cloro API key
 
-   ```bash
-   openssl rand -hex 32   # run twice: once for APP_API_KEY, once for CRON_SECRET
-   ```
+Sign up at [cloro.dev](https://cloro.dev) and copy your API key. This is the
+only paid part — it pays for the scrapes.
 
-4. **Create the tables** — clone the repo Vercel made for you, then:
+### 2. Generate two secrets
 
-   ```bash
-   DATABASE_URL="<pooled string from the Vercel project>" npx drizzle-kit push
-   ```
+You invent these; they are not issued by anyone:
 
-   Copy the value from your Vercel project's **Settings → Environment
-   Variables**, or run `vercel env pull` to get a local `.env`.
+```bash
+openssl rand -hex 32   # APP_API_KEY  — the token you send to your own API
+openssl rand -hex 32   # CRON_SECRET  — protects /api/cron and the webhook
+```
 
-5. **Create your first prompt**:
+### 3. Click Deploy and walk through Vercel
 
-   ```bash
-   curl -X POST https://<your-app>.vercel.app/api/prompts \
-     -H "Authorization: Bearer $APP_API_KEY" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "name": "best crm tools",
-       "prompt": "What are the best CRM tools for a small startup?",
-       "engines": ["chatgpt", "gemini", "perplexity"],
-       "country": "US",
-       "runsPerDay": 4
-     }'
-   ```
+The button clones this repo into your own GitHub account, provisions a
+database, and deploys. Vercel asks for four things, in this order:
 
-6. **Run it now** (instead of waiting for the schedule):
+| Screen                     | What to do                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **New Project**            | Pick your **Git Scope** (your GitHub account) and a repository name. The clone is private by default. Click **Create**.              |
+| **Add Products → Storage** | Click **Add** next to **Neon**. Accept the terms, keep the region near you, choose the **Free** plan, name the database, **Create**. |
+| **Add Environment Vars**   | Fill the three values from the table below.                                                                                          |
+| **Deploy**                 | Click it. The build takes about a minute, then your app is live.                                                                     |
 
-   ```bash
-   curl -X POST https://<your-app>.vercel.app/api/prompts/<id>/run \
-     -H "Authorization: Bearer $APP_API_KEY"
-   ```
+You are **not** asked for a database URL — the Neon step sets `DATABASE_URL`
+for you as a pooled connection string.
 
-   The call returns immediately with pending task ids; results land in
-   your database via webhook as each scrape finishes (typically within a
-   few minutes). Check them with `GET /api/results`.
+What to paste into the three fields:
+
+| Field           | Value                                         |
+| --------------- | --------------------------------------------- |
+| `CLORO_API_KEY` | Your key from step 1 (starts with `sk_live_`) |
+| `APP_API_KEY`   | The first secret from step 2                  |
+| `CRON_SECRET`   | The second secret from step 2                 |
+
+### 4. Create the tables
+
+The deploy gives you a running app, but the database is still empty. Clone
+the repo Vercel just made for you and push the schema:
+
+```bash
+git clone https://github.com/<you>/geo-tracker.git && cd geo-tracker
+npm install
+vercel env pull .env          # or copy DATABASE_URL from Settings → Environment Variables
+npx drizzle-kit push
+```
+
+This creates the two tables (`prompts`, `results`). You only do it once.
+
+### 5. Create your first prompt
+
+```bash
+curl -X POST https://<your-app>.vercel.app/api/prompts \
+  -H "Authorization: Bearer $APP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "best crm tools",
+    "prompt": "What are the best CRM tools for a small startup?",
+    "engines": ["chatgpt", "gemini", "perplexity"],
+    "country": "US",
+    "runsPerDay": 4
+  }'
+```
+
+### 6. Run it now
+
+Instead of waiting for the schedule:
+
+```bash
+curl -X POST https://<your-app>.vercel.app/api/prompts/<id>/run \
+  -H "Authorization: Bearer $APP_API_KEY"
+```
+
+The call returns immediately with pending task ids; results land in your
+database via webhook as each scrape finishes (typically within a few
+minutes). Check them with `GET /api/results`.
+
+> **Sanity check:** hitting any endpoint without a token should return
+> `401 {"error":{"message":"Unauthorized"}}`. If it does, your deployment
+> is healthy.
 
 ## Environment variables
 
