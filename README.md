@@ -11,12 +11,13 @@ every raw response in your own Postgres, and gives you a small REST API
 plus an MCP endpoint to analyze the data with Claude, Cursor, or anything
 else that speaks MCP.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker&env=CLORO_API_KEY,DATABASE_URL,APP_API_KEY,CRON_SECRET&envDescription=cloro%20API%20key%2C%20Postgres%20URL%2C%20and%20two%20self-chosen%20secrets&project-name=geo-tracker&repository-name=geo-tracker)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker&env=CLORO_API_KEY,APP_API_KEY,CRON_SECRET&envDescription=Your%20cloro%20API%20key%20plus%20two%20secrets%20you%20generate&project-name=geo-tracker&repository-name=geo-tracker&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
 
 - **No dashboard, no UI** — the MCP endpoint and the
   [Grafana starter](./grafana/README.md) are the analysis layer.
 - **$0 to run** — fits in the free tiers of Vercel and
-  [Neon](https://neon.tech) Postgres.
+  [Neon](https://neon.tech) Postgres. The deploy button provisions the
+  Neon database for you and sets `DATABASE_URL` automatically.
 - **Fully async** — scrapes are submitted as
   [cloro async tasks](https://docs.cloro.dev) and results come back by
   webhook, so no serverless function ever waits on a scrape.
@@ -30,20 +31,25 @@ cloro finishes the scrape ──────────┴──► POST /api/w
 ## 10-minute quickstart
 
 1. **Get a cloro API key** at [cloro.dev](https://cloro.dev).
-2. **Create a free Neon database** at [neon.tech](https://neon.tech) and
-   copy the **pooled** connection string (the host contains `-pooler`).
-3. **Deploy**: click the button above and fill in the env vars —
-   `CLORO_API_KEY`, `DATABASE_URL`, and two secrets you generate yourself:
+2. **Deploy**: click the button above. Vercel clones the repo and walks you
+   through creating a **Neon** database from its Marketplace — no separate
+   Neon signup, and `DATABASE_URL` is injected for you as a pooled
+   connection string.
+3. **Fill in the three env vars** the form asks for: your `CLORO_API_KEY`,
+   plus two secrets you generate yourself:
 
    ```bash
    openssl rand -hex 32   # run twice: once for APP_API_KEY, once for CRON_SECRET
    ```
 
-4. **Create the tables** — from a local clone:
+4. **Create the tables** — clone the repo Vercel made for you, then:
 
    ```bash
-   DATABASE_URL="postgres://..." npx drizzle-kit push
+   DATABASE_URL="<pooled string from the Vercel project>" npx drizzle-kit push
    ```
+
+   Copy the value from your Vercel project's **Settings → Environment
+   Variables**, or run `vercel env pull` to get a local `.env`.
 
 5. **Create your first prompt**:
 
@@ -76,7 +82,7 @@ cloro finishes the scrape ──────────┴──► POST /api/w
 | Variable               | Required | Purpose                                                                                                         |
 | ---------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
 | `CLORO_API_KEY`        | yes      | Your cloro API key — pays for the scrapes                                                                       |
-| `DATABASE_URL`         | yes      | Postgres connection string (use Neon's pooled string)                                                           |
+| `DATABASE_URL`         | yes      | Postgres connection string. Set for you by the Neon integration; supply it yourself only on other hosts         |
 | `APP_API_KEY`          | yes      | Bearer token clients must send to use the REST API and MCP endpoint                                             |
 | `CRON_SECRET`          | yes      | Protects `/api/cron` and the webhook callback URL; Vercel Cron sends it automatically                           |
 | `APP_URL`              | no       | Public base URL for the webhook callback. Derived from `VERCEL_PROJECT_PRODUCTION_URL` on Vercel; set elsewhere |
