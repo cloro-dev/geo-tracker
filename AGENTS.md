@@ -28,24 +28,30 @@ docker run -d --name tracker-db -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:1
 
 ## Verify your change
 
-Run all three before you report a change as done:
+Run all four before you report a change as done. CI runs the same set:
 
 ```bash
+pnpm test
 pnpm typecheck
 pnpm format:check
 pnpm build                     # must also pass with DATABASE_URL unset
 ```
 
-There is no test suite yet. Verify behaviour with a running server:
+Tests live beside the code as `lib/*.test.ts` and cover the logic that
+fails silently: engine payload shapes, webhook token derivation and
+signatures, the single-secret auth fallback, the cloro client's error
+handling, and the validation schemas. They need no database and no network
+— `lib/cloro.test.ts` stubs `fetch`. Keep it that way.
+
+The routes and `lib/runner.ts` are not covered yet, because they need a
+database. If you add coverage there, use a real Postgres rather than
+mocking Drizzle. For a manual check of a running server:
 
 ```bash
 pnpm start
 curl -i localhost:3000/api/prompts                                  # expect 401
 curl -i -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/prompts
 ```
-
-Tests are welcome. Put them where the code is, and keep them runnable
-without network access to cloro.
 
 ## Layout
 

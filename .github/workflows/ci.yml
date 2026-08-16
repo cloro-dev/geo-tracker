@@ -1,0 +1,37 @@
+# Runs on every push and pull request. Needs no database and no network
+# access to cloro: the tests cover the pure logic and stub fetch.
+#
+# Note: while this project lives inside another repository, GitHub ignores
+# this file. It starts running once geo-tracker is its own repository.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm test
+
+      - run: pnpm typecheck
+
+      - run: pnpm format:check
+
+      # No DATABASE_URL on purpose: the build must succeed without one, or
+      # the first deployment fails before the database is attached.
+      - run: pnpm build
