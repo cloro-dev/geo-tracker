@@ -1,20 +1,30 @@
 # geo-tracker
 
-**Self-hosted GEO (Generative Engine Optimization) + SEO tracker.
-Schedule prompts across the AI engines and Google Search, store every
-answer in your own Postgres. Your prompts, your data.**
+**Agent-ready GEO (Generative Engine Optimization) + SEO tracker. An MCP
+server your agent drives: it schedules prompts across the AI engines and
+Google Search, and keeps every answer in your own Postgres.**
 
 Configure prompts once; geo-tracker runs them on a schedule against
 ChatGPT, Gemini, Copilot, Perplexity, Grok, Google AI Mode, Google Search
-and Google News — powered by the [cloro API](https://cloro.dev) — stores
-every raw response in your own Postgres, and gives you a small REST API
-plus an MCP endpoint to analyze the data with Claude, Cursor, or anything
-else that speaks MCP.
+and Google News — powered by the [cloro API](https://cloro.dev) — and
+stores every raw response in your own Postgres.
+
+**Built to be driven by an agent, not by a dashboard.** There is no UI to
+click. Every capability is an MCP tool and a REST endpoint, so your agent
+configures the prompts, triggers the runs and reads the answers itself:
+
+> _"Track how ChatGPT and Perplexity answer 'best CRM for startups', four
+> times a day. Then tell me which brands they name most often."_
+
+That one sentence is a `create_prompt` call, a `run_prompt` call and a
+`get_results` call. You never touch a form.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker&env=CLORO_API_KEY,CRON_SECRET&envDescription=CLORO_API_KEY%3A%20sign%20up%20at%20cloro.dev%20to%20get%20a%20free%20API%20key.%20CRON_SECRET%3A%20any%20random%20string%20you%20choose%2C%20e.g.%20from%20openssl%20rand%20-hex%2032.&envLink=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker%23environment-variables&project-name=geo-tracker&repository-name=geo-tracker&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
 
-- **No dashboard, no UI** — the MCP endpoint and the
-  [Grafana starter](./grafana/README.md) are the analysis layer.
+- **Agent-ready** — one MCP endpoint exposes read _and_ write: an agent can
+  add prompts, run them and query the answers without a human in the loop.
+- **Your data, queryable** — plain Postgres, so an agent can also read it
+  with SQL, and the [Grafana starter](./grafana/README.md) charts it.
 - **$0 to run** — fits in Vercel's free tier. The deploy button creates the
   Postgres database for you and sets `DATABASE_URL` automatically.
 - **Fully async** — scrapes are submitted as
@@ -74,7 +84,32 @@ That's it — the two tables (`prompts`, `results`) are created during the
 build, so the app is ready the moment the deploy finishes. There is
 nothing to install locally.
 
-### 4. Create your first prompt
+### 4. Connect your agent
+
+Point an MCP client at the deployment — this is the intended way to use it:
+
+```bash
+claude mcp add --transport http geo-tracker \
+  https://<your-app>.vercel.app/api/mcp \
+  --header "Authorization: Bearer <CRON_SECRET>"
+```
+
+Then just ask:
+
+> _"Add a prompt called 'best crm tools' asking what the best CRM tools for
+> a small startup are. Track it on ChatGPT, Gemini and Perplexity, four
+> times a day. Run it now and show me the results."_
+
+The agent calls `create_prompt`, then `run_prompt`, then `get_results`.
+Results land in your database via webhook as each scrape finishes,
+typically within a minute.
+
+See [MCP](#mcp--the-agent-interface) for every tool and for Claude Desktop
+and Cursor configuration.
+
+### 5. Or drive it with plain HTTP
+
+Everything the agent does is a REST call, so scripts and CI work too:
 
 ```bash
 curl -X POST https://<your-app>.vercel.app/api/prompts \
@@ -87,20 +122,11 @@ curl -X POST https://<your-app>.vercel.app/api/prompts \
     "country": "US",
     "runsPerDay": 4
   }'
-```
 
-### 5. Run it now
-
-Instead of waiting for the schedule:
-
-```bash
+# run it now instead of waiting for the schedule
 curl -X POST https://<your-app>.vercel.app/api/prompts/<id>/run \
   -H "Authorization: Bearer $CRON_SECRET"
 ```
-
-The call returns immediately with pending task ids; results land in your
-database via webhook as each scrape finishes (typically within a few
-minutes). Check them with `GET /api/results`.
 
 > **Sanity check:** hitting any endpoint without a token should return
 > `401 {"error":{"message":"Unauthorized"}}`. If it does, your deployment
@@ -144,11 +170,32 @@ Engines: `chatgpt`, `gemini`, `copilot`, `perplexity`, `grok`, `aimode`,
 `limit` (default 50, max 200). The raw `response` payload is omitted from
 lists; add `include=response` to get it.
 
-## MCP
+## MCP — the agent interface
 
-Point any MCP client at your deployment and analyze your data in plain
-language ("compare how often my brand appeared in ChatGPT vs Perplexity
-answers last week").
+The MCP endpoint is the primary way to use geo-tracker. It is not a
+read-only reporting layer: an agent can create prompts, trigger runs and
+pull the stored answers, which is the whole product surface.
+
+| Tool            | What the agent can do                                 |
+| --------------- | ----------------------------------------------------- |
+| `list_prompts`  | See what is being tracked, and when each last ran     |
+| `create_prompt` | Add a prompt, pick the engines, set how often it runs |
+| `run_prompt`    | Run one now instead of waiting for the schedule       |
+| `get_results`   | Query runs by prompt, engine or status                |
+| `get_result`    | Pull one full raw engine answer for analysis          |
+
+Things worth asking an agent once it is connected:
+
+- "Add these ten questions our buyers ask, tracked daily on ChatGPT and
+  Perplexity."
+- "Which brands does Gemini name when asked about us, and how has that
+  changed this month?"
+- "Run every prompt now and summarise what changed since yesterday."
+- "Which of our pages get cited in AI answers, and which never do?"
+
+Because the answers are stored as raw payloads, the agent does the
+analysis — geo-tracker only guarantees the data is there, complete and
+timestamped.
 
 Claude Code:
 
@@ -171,8 +218,9 @@ Claude Desktop / Cursor (`mcpServers` config):
 }
 ```
 
-Tools: `list_prompts`, `create_prompt`, `run_prompt`, `get_results`,
-`get_result` (full raw response payload).
+Transport is Streamable HTTP, and the bearer token is the same secret the
+REST API uses. Any MCP-capable client works — Claude Code, Claude Desktop,
+Cursor, or your own agent built on an SDK.
 
 ## Scheduling
 
