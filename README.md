@@ -28,7 +28,7 @@ That one sentence is a `create_prompt` call, a `run_prompt` call and a
 - **$0 to run** — fits in Vercel's free tier. The deploy button creates the
   Postgres database for you and sets `DATABASE_URL` automatically.
 - **Fully async** — scrapes are submitted as
-  [cloro async tasks](https://docs.cloro.dev) and results come back by
+  [cloro async tasks](https://cloro.dev/docs) and results come back by
   webhook, so no serverless function ever waits on a scrape.
 
 ```text
