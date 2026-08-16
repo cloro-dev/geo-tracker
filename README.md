@@ -252,6 +252,9 @@ tier at your Postgres and import one JSON file.
 
 ## Local development
 
+Contributing with a coding agent? [`AGENTS.md`](./AGENTS.md) documents the
+commands, the layout and the invariants that are easy to break.
+
 ```bash
 # any Postgres works; quickest:
 docker run -d --name tracker-db -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:16
