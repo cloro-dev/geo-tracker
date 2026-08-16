@@ -4,6 +4,17 @@
 server your agent drives: it schedules prompts across the AI engines and
 Google Search, and keeps every answer in your own Postgres.**
 
+## ⚡ 1-click deploy this tool
+
+[![1-click deploy to Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker&env=CLORO_API_KEY,CRON_SECRET&envDescription=CLORO_API_KEY%3A%20sign%20up%20at%20cloro.dev%20to%20get%20a%20free%20API%20key.%20CRON_SECRET%3A%20any%20random%20string%20you%20choose%2C%20e.g.%20from%20openssl%20rand%20-hex%2032.&envLink=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker%23environment-variables&project-name=geo-tracker&repository-name=geo-tracker&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+
+**Your own tracker, live in about a minute.** The button forks the repo,
+creates the database, applies the schema and deploys. You paste two
+values; there is nothing to install and nothing to configure afterwards.
+Free tier all the way through.
+
+---
+
 Configure prompts once; geo-tracker runs them on a schedule against
 ChatGPT, Gemini, Copilot, Perplexity, Grok, Google AI Mode, Google Search
 and Google News — powered by the [cloro API](https://cloro.dev) — and
@@ -19,14 +30,11 @@ configures the prompts, triggers the runs and reads the answers itself:
 That one sentence is a `create_prompt` call, a `run_prompt` call and a
 `get_results` call. You never touch a form.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker&env=CLORO_API_KEY,CRON_SECRET&envDescription=CLORO_API_KEY%3A%20sign%20up%20at%20cloro.dev%20to%20get%20a%20free%20API%20key.%20CRON_SECRET%3A%20any%20random%20string%20you%20choose%2C%20e.g.%20from%20openssl%20rand%20-hex%2032.&envLink=https%3A%2F%2Fgithub.com%2Fcloro-dev%2Fgeo-tracker%23environment-variables&project-name=geo-tracker&repository-name=geo-tracker&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
-
 - **Agent-ready** — one MCP endpoint exposes read _and_ write: an agent can
   add prompts, run them and query the answers without a human in the loop.
 - **Your data, queryable** — plain Postgres, so an agent can also read it
   with SQL, and the [Grafana starter](./grafana/README.md) charts it.
-- **$0 to run** — fits in Vercel's free tier. The deploy button creates the
-  Postgres database for you and sets `DATABASE_URL` automatically.
+- **$0 to run** — fits in Vercel's free tier, database included.
 - **Fully async** — scrapes are submitted as
   [cloro async tasks](https://cloro.dev/docs) and results come back by
   webhook, so no serverless function ever waits on a scrape.
@@ -60,8 +68,9 @@ variable with that exact name.
 
 ### 3. Click Deploy and walk through Vercel
 
-The button clones this repo into your own GitHub account, provisions a
-database, and deploys. Vercel asks for four things, in this order:
+Use the [1-click deploy](#-1-click-deploy-this-tool) button at the top. It
+clones this repo into your own GitHub account, provisions a database, and
+deploys. Vercel asks for four things, in this order:
 
 | Screen                     | What to do                                                                                                              |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
