@@ -1,5 +1,6 @@
-# Runs on every push and pull request. Needs no database and no network
-# access to cloro: the tests cover the pure logic and stub fetch.
+# Runs on every push and pull request. Needs no network access to cloro:
+# the tests stub fetch. A Postgres service backs the database-backed suites,
+# which skip themselves when DATABASE_URL is absent.
 #
 # Note: while this project lives inside another repository, GitHub ignores
 # this file. It starts running once geo-tracker is its own repository.
@@ -14,6 +15,21 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: geo_tracker_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +43,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm test
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/geo_tracker_test
 
       - run: pnpm typecheck
 

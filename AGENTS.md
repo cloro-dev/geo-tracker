@@ -37,15 +37,24 @@ pnpm format:check
 pnpm build                     # must also pass with DATABASE_URL unset
 ```
 
-Tests live beside the code as `lib/*.test.ts` and cover the logic that
-fails silently: engine payload shapes, webhook token derivation and
-signatures, the single-secret auth fallback, the cloro client's error
-handling, and the validation schemas. They need no database and no network
-— `lib/cloro.test.ts` stubs `fetch`. Keep it that way.
+Tests live beside the code as `lib/*.test.ts`, plus `test/api.test.ts` for
+the route handlers. No test reaches the network — `fetch` is stubbed.
 
-The routes and `lib/runner.ts` are not covered yet, because they need a
-database. If you add coverage there, use a real Postgres rather than
-mocking Drizzle. For a manual check of a running server:
+Two kinds:
+
+- **Pure logic** (engines, webhooks, auth, cloro client, validation). Runs
+  anywhere, needs nothing.
+- **Database-backed** (`lib/runner.test.ts`, `test/api.test.ts`). Uses a
+  real Postgres through `DATABASE_URL`, and **skips itself when that is
+  unset**, so `pnpm test` on a laptop without Postgres still passes while
+  quietly covering less. Export `DATABASE_URL` to run the full suite, as
+  CI does.
+
+Test against a real database rather than mocking Drizzle: what matters in
+the runner is the atomic claim and a partial index, and a mocked query
+builder would only assert that we called the mock.
+
+For a manual check of a running server:
 
 ```bash
 pnpm start
