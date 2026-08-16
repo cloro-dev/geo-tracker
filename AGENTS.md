@@ -114,6 +114,9 @@ submit twice. Keep that update atomic.
 
 - TypeScript strict; no `any` unless you explain why.
 - Prettier defaults, no ESLint. Run `pnpm format` before committing.
+- Vitest is deliberate, not incidental. `node:test` cannot resolve the
+  `@/` alias, so dropping it would mean rewriting production imports to
+  suit the test runner and raising the required Node version. Keep it.
 - REST handlers validate with the Zod schemas in `lib/validation.ts`. MCP
   tools declare their input schema inline, because the protocol publishes
   it to the client.
