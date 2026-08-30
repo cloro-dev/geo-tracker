@@ -1,3 +1,4 @@
+import candidatesFile from "./brand-candidates.json";
 import type { Brand } from "./db/schema";
 
 /**
@@ -10,7 +11,44 @@ import type { Brand } from "./db/schema";
  */
 
 /** Bump when the rules below change, so finished results are re-derived. */
-export const EXTRACTION_REVISION = 1;
+export const EXTRACTION_REVISION = 2;
+
+/**
+ * Names to watch for without tracking them. See `brand-candidates.json`.
+ */
+// Typed through `unknown[]` rather than trusting the import: an empty
+// array in the shipped JSON infers as `never[]`, and a user editing the
+// file by hand is exactly the case that puts a non-string in it.
+export const BRAND_CANDIDATES: string[] = (
+  (candidatesFile as { candidates?: unknown[] }).candidates ?? []
+).filter(
+  (name): name is string => typeof name === "string" && name.trim().length > 0,
+);
+
+/** FNV-1a, folded to 31 bits so it fits the integer column. */
+function fingerprint(text: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash & 0x7fffffff;
+}
+
+/**
+ * What `results.extraction_revision` stores: a fingerprint of everything
+ * that decides the output, not a version number.
+ *
+ * The candidate list is a FILE, so nothing calls
+ * `markAllForReextraction()` when it changes — unlike the brands table,
+ * which has a write path that can. Folding the list into the stamp means
+ * an edited file simply no longer matches what is stored, and the next
+ * tick re-derives the history on its own. Sorted first so reordering the
+ * file is not a change.
+ */
+export const EXTRACTION_STAMP = fingerprint(
+  `${EXTRACTION_REVISION}:${[...BRAND_CANDIDATES].sort().join("\u0000")}`,
+);
 
 export interface ExtractedSource {
   kind: string;
@@ -29,10 +67,23 @@ export interface ExtractedMention {
   citedSourceCount: number;
 }
 
+export interface ExtractedQuery {
+  kind: string;
+  position: number | null;
+  query: string;
+}
+
+export interface ExtractedCandidate {
+  name: string;
+  mentionCount: number;
+}
+
 export interface Extraction {
   text: string;
   sources: ExtractedSource[];
   mentions: ExtractedMention[];
+  queries: ExtractedQuery[];
+  candidates: ExtractedCandidate[];
 }
 
 /**
@@ -269,6 +320,73 @@ export function extractMentions(
   });
 }
 
+/**
+ * The queries an engine typed, and the follow-ups it offered.
+ *
+ * Only ChatGPT, Copilot, Grok and Perplexity report what they searched;
+ * the rest return nothing here, and an empty result for those is the
+ * honest answer rather than missing data.
+ */
+export function extractSearchQueries(response: unknown): ExtractedQuery[] {
+  const result = unwrap(response);
+  if (result === null) return [];
+
+  const queries: ExtractedQuery[] = [];
+  const seen = new Set<string>();
+
+  const push = (kind: string, value: unknown) => {
+    const query = typeof value === "string" ? value.trim() : "";
+    if (query.length === 0) return;
+    const key = `${kind} ${query.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    queries.push({ kind, position: queries.length + 1, query });
+  };
+
+  // What the model actually searched. Perplexity names the same thing
+  // differently; both are the engine's own reformulation of the prompt.
+  for (const item of asArray(result.searchQueries)) push("issued", item);
+  for (const item of asArray(result.search_model_queries)) {
+    push("issued", item);
+  }
+
+  // Follow-up chips shown to the reader. Navigation furniture, not the
+  // engine's reasoning, so it never pools with the above.
+  for (const item of asArray(result.related_queries)) push("suggested", item);
+  for (const item of asArray(result.relatedSearches)) {
+    if (typeof item === "object" && item !== null) {
+      push("suggested", (item as Record<string, unknown>).query);
+    } else {
+      push("suggested", item);
+    }
+  }
+
+  return queries;
+}
+
+/**
+ * Candidate names the answer mentioned.
+ *
+ * Same literal matching as a tracked brand, and deliberately no more: this
+ * cannot discover a brand nobody listed. It tells you which of the names
+ * YOU wrote down are turning up, so promoting one into `brands` is a
+ * decision you make on evidence rather than a guess the code made for you.
+ *
+ * Only the hits are returned. A candidate is not tracked, so it has no
+ * denominator to preserve and a row of zeroes would say nothing.
+ */
+export function extractCandidates(
+  text: string,
+  names: string[] = BRAND_CANDIDATES,
+): ExtractedCandidate[] {
+  const found: ExtractedCandidate[] = [];
+  for (const name of names) {
+    const [count] = countMatches(text, name);
+    if (count > 0) found.push({ name, mentionCount: count });
+  }
+  return found;
+}
+
 /** Everything derived from one stored response, in one pass. */
 export function extractResult(
   response: unknown,
@@ -276,5 +394,11 @@ export function extractResult(
 ): Extraction {
   const text = answerText(response);
   const sources = extractSources(response);
-  return { text, sources, mentions: extractMentions(text, sources, brandList) };
+  return {
+    text,
+    sources,
+    mentions: extractMentions(text, sources, brandList),
+    queries: extractSearchQueries(response),
+    candidates: extractCandidates(text),
+  };
 }

@@ -62,10 +62,6 @@
     {
       "type": "stat",
       "title": "Named in answers",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES}"
-      },
       "gridPos": {
         "h": 5,
         "w": 6,
@@ -73,6 +69,10 @@
         "y": 0
       },
       "id": 1,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -121,10 +121,6 @@
     {
       "type": "stat",
       "title": "Cited in answers",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES}"
-      },
       "gridPos": {
         "h": 5,
         "w": 6,
@@ -132,6 +128,10 @@
         "y": 0
       },
       "id": 2,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -180,10 +180,6 @@
     {
       "type": "stat",
       "title": "Share of voice",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES}"
-      },
       "gridPos": {
         "h": 5,
         "w": 6,
@@ -191,6 +187,10 @@
         "y": 0
       },
       "id": 3,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -239,10 +239,6 @@
     {
       "type": "stat",
       "title": "Answers analysed",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES}"
-      },
       "gridPos": {
         "h": 5,
         "w": 6,
@@ -250,6 +246,10 @@
         "y": 0
       },
       "id": 4,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -287,10 +287,6 @@
     {
       "type": "table",
       "title": "Brand ranking — named and cited",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES}"
-      },
       "gridPos": {
         "h": 9,
         "w": 12,
@@ -298,6 +294,10 @@
         "y": 5
       },
       "id": 5,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -386,10 +386,6 @@
     {
       "type": "timeseries",
       "title": "Visibility over time — every tracked brand",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES}"
-      },
       "gridPos": {
         "h": 9,
         "w": 12,
@@ -397,6 +393,10 @@
         "y": 5
       },
       "id": 6,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -440,10 +440,6 @@
     {
       "type": "barchart",
       "title": "Our visibility by engine",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES}"
-      },
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -451,6 +447,10 @@
         "y": 14
       },
       "id": 7,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -488,10 +488,6 @@
     {
       "type": "table",
       "title": "Every prompt — how we do on each",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES}"
-      },
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -499,6 +495,10 @@
         "y": 14
       },
       "id": 8,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -508,7 +508,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT p.name AS \"Prompt\",\n    count(*) AS \"Answers\",\n    round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS \"Named %\",\n    round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS \"Cited %\"\n  FROM result_brand_mentions m\n  JOIN brands b ON b.id = m.brand_id\n  JOIN results r ON r.id = m.result_id\n  JOIN prompts p ON p.id = r.prompt_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring}) AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)\n  GROUP BY p.id, p.name\n  ORDER BY \"Named %\" ASC;"
+          "rawSql": "SELECT p.name AS \"Prompt\",\n    count(*) AS \"Answers\",\n    round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS \"Named %\",\n    round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS \"Cited %\",\n    round(avg(m.first_position) FILTER (WHERE m.mentioned)) AS \"Avg position\"\n  FROM result_brand_mentions m\n  JOIN brands b ON b.id = m.brand_id\n  JOIN results r ON r.id = m.result_id\n  JOIN prompts p ON p.id = r.prompt_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring}) AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)\n  GROUP BY p.id, p.name\n  ORDER BY \"Named %\" ASC;"
         }
       ],
       "fieldConfig": {
@@ -582,15 +582,11 @@
       "options": {
         "showHeader": true
       },
-      "description": "Sorted worst first: the prompts at the top are the ones you are losing. Joined through the prompt, so a prompt you disabled still shows its history."
+      "description": "Sorted worst first: the prompts at the top are the ones you are losing. Joined through the prompt, so a prompt you disabled still shows its history. Avg position is the character offset of your first mention, averaged over the answers that named you — engines write prose, not a numbered list, so how early you appear is the strongest claim the text supports. Blank means never named."
     },
     {
       "type": "table",
       "title": "Pages to get listed on",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES}"
-      },
       "gridPos": {
         "h": 9,
         "w": 12,
@@ -598,6 +594,10 @@
         "y": 22
       },
       "id": 9,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -686,10 +686,6 @@
     {
       "type": "table",
       "title": "Our own pages — retrieved, and did the answer name us?",
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${DS_POSTGRES}"
-      },
       "gridPos": {
         "h": 9,
         "w": 12,
@@ -697,6 +693,10 @@
         "y": 22
       },
       "id": 10,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
       "targets": [
         {
           "refId": "A",
@@ -781,6 +781,346 @@
         "showHeader": true
       },
       "description": "Your pages that engines actually retrieved. 'Cited as' matters: a link that only ever appears as an ad is not the same win as one in the source rail. Empty means no engine has retrieved your site for these prompts."
+    },
+    {
+      "type": "text",
+      "title": "How to read this",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "id": 11,
+      "options": {
+        "mode": "markdown",
+        "content": "**Denominators.** Every percentage divides by *completed* answers in the selected range. Failed scrapes are excluded everywhere — an errored run is not an answer that declined to name you. A brand that is never named holds rows at 0% rather than dropping out, so a blank line means no data, not zero.\n\n**Named is not cited.** *Named* means the prose wrote your name. *Cited* means a link pointed at one of your domains. An answer can recommend you without linking you, or link you without naming you, so no panel pools them.\n\n**Google is different.** It returns a page of links and only writes prose when an AI Overview was served, so its Named % is structurally low. Read its Cited % instead.\n\n**Search queries come from four engines.** ChatGPT, Copilot, Grok and Perplexity report what they searched; Gemini and the Google engines do not. That panel is a sample of what a model types, not a ranking — the strings are mostly unique, so ordering by count is close to arbitrary.\n\n**Candidates are names you listed.** The untracked-brands panel can only find names written in `lib/brand-candidates.json`. It does not discover a brand nobody wrote down."
+      }
+    },
+    {
+      "type": "table",
+      "title": "Top search queries the engines issued",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "id": 12,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT q.query AS \"Query\",\n    count(*) AS \"Times\",\n    count(DISTINCT r.engine) AS \"Engines\",\n    count(DISTINCT r.prompt_id) AS \"Prompts\"\n  FROM result_search_queries q\n  JOIN results r ON r.id = q.result_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring}) AND q.kind = 'issued'\n  GROUP BY q.query\n  ORDER BY count(*) DESC, q.query\n  LIMIT 40;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Times|Engines|Prompts"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "description": "What the model typed before it retrieved anything — a stage upstream of every other panel. It does not search your prompt; it rewrites the prompt, often with a vendor list already attached. Only ChatGPT, Copilot, Grok and Perplexity report this, so picking any other engine empties the panel. Ordering by count is nearly arbitrary: these strings are mostly unique, so read it as a sample with repeats surfaced first."
+    },
+    {
+      "type": "table",
+      "title": "Named but not tracked — candidates worth adding",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "id": 13,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT c.name AS \"Name\",\n    sum(c.mention_count) AS \"Mentions\",\n    count(DISTINCT r.engine) AS \"Engines\",\n    count(DISTINCT r.prompt_id) AS \"Prompts\",\n    max(r.completed_at)::date::text AS \"Last seen\"\n  FROM result_candidate_mentions c\n  JOIN results r ON r.id = c.result_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring})\n    AND lower(c.name) NOT IN (SELECT lower(name) FROM brands)\n  GROUP BY c.name\n  ORDER BY sum(c.mention_count) DESC\n  LIMIT 30;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Mentions|Engines|Prompts"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "description": "Names from lib/brand-candidates.json that answers mentioned and that you are NOT tracking yet. This is a proposal, not a gap: a name here may be genuinely out of scope, or a competitor worth promoting into the brands table. Only you can tell those apart, which is why nothing is added automatically. Empty until you fill in the candidates file."
+    },
+    {
+      "type": "table",
+      "title": "Top YouTube videos — retrieved for your prompts",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 49
+      },
+      "id": 14,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT coalesce(s.label, s.url) AS \"Video\",\n    count(DISTINCT s.result_id) AS \"Answers\"\n  FROM result_sources s\n  JOIN results r ON r.id = s.result_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring})\n    AND (s.domain = 'youtube.com' OR s.domain = 'youtu.be'\n         OR s.domain LIKE '%.youtube.com')\n  GROUP BY s.url, s.label\n  ORDER BY count(DISTINCT s.result_id) DESC\n  LIMIT 20;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Answers"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "description": "Video the engines pulled in while answering. A video cited often for your prompts is a placement worth pursuing, and one you already appear in is worth knowing about."
+    },
+    {
+      "type": "table",
+      "title": "Top Reddit posts — retrieved for your prompts",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 49
+      },
+      "id": 15,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT coalesce(s.label, s.url) AS \"Post\",\n    count(DISTINCT s.result_id) AS \"Answers\"\n  FROM result_sources s\n  JOIN results r ON r.id = s.result_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring})\n    AND (s.domain = 'reddit.com' OR s.domain = 'redd.it'\n         OR s.domain LIKE '%.reddit.com')\n  GROUP BY s.url, s.label\n  ORDER BY count(DISTINCT s.result_id) DESC\n  LIMIT 20;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Answers"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "description": "Reddit threads the engines retrieved. Forum posts carry disproportionate weight in AI answers, and unlike a publisher's listicle a thread is something you can take part in."
+    },
+    {
+      "type": "table",
+      "title": "Prompt redundancy — prompts that retrieve the same pages",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 57
+      },
+      "id": 16,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH per_prompt AS (\n    SELECT r.prompt_id, s.domain\n    FROM result_sources s\n    JOIN results r ON r.id = s.result_id\n    WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring})\n    GROUP BY r.prompt_id, s.domain\n  )\n  SELECT p1.name AS \"Prompt\",\n    p2.name AS \"Overlaps with\",\n    round(100.0 * count(*) / greatest(\n      (SELECT count(*) FROM per_prompt x WHERE x.prompt_id = a.prompt_id), 1\n    ), 1) AS \"Shared domains %\"\n  FROM per_prompt a\n  JOIN per_prompt b ON b.domain = a.domain AND b.prompt_id <> a.prompt_id\n  JOIN prompts p1 ON p1.id = a.prompt_id\n  JOIN prompts p2 ON p2.id = b.prompt_id\n  GROUP BY p1.name, p2.name, a.prompt_id\n  ORDER BY 3 DESC\n  LIMIT 30;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Shared domains %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 170
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "description": "Reported, not enforced. A near-duplicate prompt is a second SAMPLE of the same question, which is often worth more than the denominator purity it costs — so a high number here is information, not a defect to fix. A prompt that retrieved nothing is absent rather than shown at 0%: it is unmeasured, not maximally distinctive."
+    },
+    {
+      "type": "timeseries",
+      "title": "Data quality — answers that retrieved nothing",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 57
+      },
+      "id": 17,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('day', r.completed_at) AS \"time\",\n    r.engine AS metric,\n    round(100.0 * count(*) FILTER (WHERE s.result_id IS NULL)\n      / greatest(count(*), 1), 1) AS value\n  FROM results r\n  LEFT JOIN (SELECT DISTINCT result_id FROM result_sources) s\n    ON s.result_id = r.id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring})\n  GROUP BY 1, r.engine\n  ORDER BY 1;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "showPoints": "auto",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Share of completed answers that came back with no links at all, per engine per day. Some of this is real — an engine can answer from memory — but a line that climbs is usually a payload shape that changed under the extractor, and every source panel above goes quiet with it."
     }
   ]
 }

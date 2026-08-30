@@ -179,3 +179,68 @@ export type ResultSource = typeof resultSources.$inferSelect;
 export type NewResultSource = typeof resultSources.$inferInsert;
 export type ResultBrandMention = typeof resultBrandMentions.$inferSelect;
 export type NewResultBrandMention = typeof resultBrandMentions.$inferInsert;
+
+/**
+ * The literal queries an engine typed, flattened out of the payload.
+ *
+ * A stage upstream of every other derived table: `result_brand_mentions`
+ * records that a brand was named and `result_sources` that a page was
+ * retrieved; this is what the model searched for before either happened.
+ * It does not search your prompt — it rewrites the prompt, often with a
+ * vendor list already attached.
+ */
+export const resultSearchQueries = pgTable(
+  "result_search_queries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    resultId: uuid("result_id")
+      .notNull()
+      .references(() => results.id, { onDelete: "cascade" }),
+    // `issued` is what the model actually searched. `suggested` is the
+    // follow-up chips it offered the reader. Kept apart because they are
+    // different acts: one is the engine's own reasoning, the other is
+    // navigation furniture, and pooling them would misread the first.
+    kind: text("kind").notNull(),
+    position: integer("position"),
+    query: text("query").notNull(),
+  },
+  (table) => [
+    index("result_search_queries_result_idx").on(table.resultId),
+    index("result_search_queries_kind_idx").on(table.kind),
+  ],
+);
+
+/**
+ * Names from `lib/brand-candidates.json` that an answer mentioned.
+ *
+ * Separate from `result_brand_mentions` because these are not tracked
+ * brands: there is no denominator to hold, no citation to check, and a
+ * candidate that never appears needs no row. This table only ever says
+ * "this name was named this often", which is the evidence for deciding
+ * whether to promote it into `brands`.
+ */
+export const resultCandidateMentions = pgTable(
+  "result_candidate_mentions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    resultId: uuid("result_id")
+      .notNull()
+      .references(() => results.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    mentionCount: integer("mention_count").notNull(),
+  },
+  (table) => [
+    uniqueIndex("result_candidate_mentions_result_name_idx").on(
+      table.resultId,
+      table.name,
+    ),
+    index("result_candidate_mentions_name_idx").on(table.name),
+  ],
+);
+
+export type ResultSearchQuery = typeof resultSearchQueries.$inferSelect;
+export type NewResultSearchQuery = typeof resultSearchQueries.$inferInsert;
+export type ResultCandidateMention =
+  typeof resultCandidateMentions.$inferSelect;
+export type NewResultCandidateMention =
+  typeof resultCandidateMentions.$inferInsert;

@@ -57,13 +57,13 @@ DELETE FROM results WHERE created_at < now() - interval '90 days';
 -- ============================================================
 -- Brand visibility (geo-visibility.json)
 --
--- These read result_sources and result_brand_mentions, the tables the
--- scheduler tick derives from results.response. The Grafana macros are
--- replaced here with plain predicates so each block runs as-is in psql.
+-- These read the tables the scheduler tick derives from results.response:
+-- result_sources, result_brand_mentions, result_search_queries and
+-- result_candidate_mentions. The Grafana macros are replaced here with
+-- plain predicates so each block runs as-is in psql.
 -- ============================================================
 
 -- Named in answers
--- Share of completed answers naming your brand. Denominator is every answer.
 SELECT round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS value
   FROM result_brand_mentions m
   JOIN brands b ON b.id = m.brand_id
@@ -73,7 +73,6 @@ SELECT round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1)
     AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1);
 
 -- Cited in answers
--- Share of answers linking one of your own domains.
 SELECT round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS value
   FROM result_brand_mentions m
   JOIN brands b ON b.id = m.brand_id
@@ -83,7 +82,6 @@ SELECT round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1)
     AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1);
 
 -- Share of voice
--- Your mentions as a share of every tracked brand's mentions.
 SELECT round(100.0 * count(*) FILTER (WHERE m.mentioned AND b.is_own)
     / greatest(count(*) FILTER (WHERE m.mentioned), 1), 1) AS value
   FROM result_brand_mentions m
@@ -94,7 +92,6 @@ SELECT round(100.0 * count(*) FILTER (WHERE m.mentioned AND b.is_own)
     AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google');
 
 -- Answers analysed
--- Completed runs in range. Failed runs are excluded everywhere.
 SELECT count(DISTINCT r.id) AS value
   FROM results r
   WHERE r.status = 'completed'
@@ -102,7 +99,6 @@ SELECT count(DISTINCT r.id) AS value
     AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google');
 
 -- Brand ranking — named and cited
--- Every brand, including ones never named — they hold a row at 0%.
 SELECT b.name || CASE WHEN b.is_own THEN ' (us)' ELSE '' END AS "Brand",
     count(*) AS "Answers",
     round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS "Named %",
@@ -117,7 +113,6 @@ SELECT b.name || CASE WHEN b.is_own THEN ' (us)' ELSE '' END AS "Brand",
   ORDER BY "Named %" DESC;
 
 -- Visibility over time — every tracked brand
--- Daily mention rate per brand.
 SELECT date_trunc('day', r.completed_at) AS "time",
     b.name AS metric,
     round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS value
@@ -131,7 +126,6 @@ SELECT date_trunc('day', r.completed_at) AS "time",
   ORDER BY 1;
 
 -- Our visibility by engine
--- Your visibility split by engine. Google sits low on Named % by construction.
 SELECT r.engine AS "Engine",
     round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS "Named %",
     round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS "Cited %"
@@ -145,11 +139,11 @@ SELECT r.engine AS "Engine",
   ORDER BY "Named %" DESC;
 
 -- Every prompt — how we do on each
--- Per prompt, worst first.
 SELECT p.name AS "Prompt",
     count(*) AS "Answers",
     round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS "Named %",
-    round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS "Cited %"
+    round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS "Cited %",
+    round(avg(m.first_position) FILTER (WHERE m.mentioned)) AS "Avg position"
   FROM result_brand_mentions m
   JOIN brands b ON b.id = m.brand_id
   JOIN results r ON r.id = m.result_id
@@ -161,7 +155,6 @@ SELECT p.name AS "Prompt",
   ORDER BY "Named %" ASC;
 
 -- Pages to get listed on
--- Third-party pages the engines retrieved, and how often you were named alongside them.
 SELECT s.domain AS "Domain",
     count(DISTINCT s.result_id) AS "Answers citing it",
     count(DISTINCT r.prompt_id) AS "Prompts",
@@ -180,7 +173,6 @@ SELECT s.domain AS "Domain",
   LIMIT 30;
 
 -- Our own pages — retrieved, and did the answer name us?
--- Your own pages, and what kind of slot they were cited in.
 SELECT s.domain AS "Domain",
     s.kind AS "Cited as",
     count(DISTINCT s.result_id) AS "Answers citing it",
@@ -198,3 +190,98 @@ SELECT s.domain AS "Domain",
     )
   GROUP BY s.domain, s.kind
   ORDER BY "Answers citing it" DESC;
+
+-- Top search queries the engines issued
+SELECT q.query AS "Query",
+    count(*) AS "Times",
+    count(DISTINCT r.engine) AS "Engines",
+    count(DISTINCT r.prompt_id) AS "Prompts"
+  FROM result_search_queries q
+  JOIN results r ON r.id = q.result_id
+  WHERE r.status = 'completed'
+    AND r.completed_at > now() - interval '30 days'
+    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google') AND q.kind = 'issued'
+  GROUP BY q.query
+  ORDER BY count(*) DESC, q.query
+  LIMIT 40;
+
+-- Named but not tracked — candidates worth adding
+SELECT c.name AS "Name",
+    sum(c.mention_count) AS "Mentions",
+    count(DISTINCT r.engine) AS "Engines",
+    count(DISTINCT r.prompt_id) AS "Prompts",
+    max(r.completed_at)::date::text AS "Last seen"
+  FROM result_candidate_mentions c
+  JOIN results r ON r.id = c.result_id
+  WHERE r.status = 'completed'
+    AND r.completed_at > now() - interval '30 days'
+    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
+    AND lower(c.name) NOT IN (SELECT lower(name) FROM brands)
+  GROUP BY c.name
+  ORDER BY sum(c.mention_count) DESC
+  LIMIT 30;
+
+-- Top YouTube videos — retrieved for your prompts
+SELECT coalesce(s.label, s.url) AS "Video",
+    count(DISTINCT s.result_id) AS "Answers"
+  FROM result_sources s
+  JOIN results r ON r.id = s.result_id
+  WHERE r.status = 'completed'
+    AND r.completed_at > now() - interval '30 days'
+    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
+    AND (s.domain = 'youtube.com' OR s.domain = 'youtu.be'
+         OR s.domain LIKE '%.youtube.com')
+  GROUP BY s.url, s.label
+  ORDER BY count(DISTINCT s.result_id) DESC
+  LIMIT 20;
+
+-- Top Reddit posts — retrieved for your prompts
+SELECT coalesce(s.label, s.url) AS "Post",
+    count(DISTINCT s.result_id) AS "Answers"
+  FROM result_sources s
+  JOIN results r ON r.id = s.result_id
+  WHERE r.status = 'completed'
+    AND r.completed_at > now() - interval '30 days'
+    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
+    AND (s.domain = 'reddit.com' OR s.domain = 'redd.it'
+         OR s.domain LIKE '%.reddit.com')
+  GROUP BY s.url, s.label
+  ORDER BY count(DISTINCT s.result_id) DESC
+  LIMIT 20;
+
+-- Prompt redundancy — prompts that retrieve the same pages
+WITH per_prompt AS (
+    SELECT r.prompt_id, s.domain
+    FROM result_sources s
+    JOIN results r ON r.id = s.result_id
+    WHERE r.status = 'completed'
+    AND r.completed_at > now() - interval '30 days'
+    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
+    GROUP BY r.prompt_id, s.domain
+  )
+  SELECT p1.name AS "Prompt",
+    p2.name AS "Overlaps with",
+    round(100.0 * count(*) / greatest(
+      (SELECT count(*) FROM per_prompt x WHERE x.prompt_id = a.prompt_id), 1
+    ), 1) AS "Shared domains %"
+  FROM per_prompt a
+  JOIN per_prompt b ON b.domain = a.domain AND b.prompt_id <> a.prompt_id
+  JOIN prompts p1 ON p1.id = a.prompt_id
+  JOIN prompts p2 ON p2.id = b.prompt_id
+  GROUP BY p1.name, p2.name, a.prompt_id
+  ORDER BY 3 DESC
+  LIMIT 30;
+
+-- Data quality — answers that retrieved nothing
+SELECT date_trunc('day', r.completed_at) AS "time",
+    r.engine AS metric,
+    round(100.0 * count(*) FILTER (WHERE s.result_id IS NULL)
+      / greatest(count(*), 1), 1) AS value
+  FROM results r
+  LEFT JOIN (SELECT DISTINCT result_id FROM result_sources) s
+    ON s.result_id = r.id
+  WHERE r.status = 'completed'
+    AND r.completed_at > now() - interval '30 days'
+    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
+  GROUP BY 1, r.engine
+  ORDER BY 1;

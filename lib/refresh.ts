@@ -4,13 +4,17 @@ import { getDb } from "./db";
 import {
   brands,
   resultBrandMentions,
+  resultCandidateMentions,
   results,
+  resultSearchQueries,
   resultSources,
   type Brand,
   type NewResultBrandMention,
+  type NewResultCandidateMention,
+  type NewResultSearchQuery,
   type NewResultSource,
 } from "./db/schema";
-import { EXTRACTION_REVISION, extractResult } from "./extract";
+import { EXTRACTION_STAMP, extractResult } from "./extract";
 
 /**
  * Derives `result_sources` and `result_brand_mentions` from finished
@@ -90,13 +94,22 @@ async function extractOne(
   row: { id: string; response: unknown },
   brandList: Brand[],
 ): Promise<number> {
-  const { sources, mentions } = extractResult(row.response, brandList);
+  const { sources, mentions, queries, candidates } = extractResult(
+    row.response,
+    brandList,
+  );
 
   await db.transaction(async (tx) => {
     await tx.delete(resultSources).where(eq(resultSources.resultId, row.id));
     await tx
       .delete(resultBrandMentions)
       .where(eq(resultBrandMentions.resultId, row.id));
+    await tx
+      .delete(resultSearchQueries)
+      .where(eq(resultSearchQueries.resultId, row.id));
+    await tx
+      .delete(resultCandidateMentions)
+      .where(eq(resultCandidateMentions.resultId, row.id));
 
     if (sources.length > 0) {
       const sourceRows: NewResultSource[] = sources.map((source) => ({
@@ -123,12 +136,33 @@ async function extractOne(
       await tx.insert(resultBrandMentions).values(mentionRows);
     }
 
+    if (queries.length > 0) {
+      const queryRows: NewResultSearchQuery[] = queries.map((entry) => ({
+        resultId: row.id,
+        kind: entry.kind,
+        position: entry.position,
+        query: entry.query,
+      }));
+      await tx.insert(resultSearchQueries).values(queryRows);
+    }
+
+    if (candidates.length > 0) {
+      const candidateRows: NewResultCandidateMention[] = candidates.map(
+        (entry) => ({
+          resultId: row.id,
+          name: entry.name,
+          mentionCount: entry.mentionCount,
+        }),
+      );
+      await tx.insert(resultCandidateMentions).values(candidateRows);
+    }
+
     // Inside the transaction: a crash between writing the rows and marking
     // the result would otherwise leave it looking extracted when it is
     // half-written, and nothing would ever revisit it.
     await tx
       .update(results)
-      .set({ extractionRevision: EXTRACTION_REVISION })
+      .set({ extractionRevision: EXTRACTION_STAMP })
       .where(eq(results.id, row.id));
   });
 
@@ -167,7 +201,7 @@ export async function refreshDerived(
         eq(results.status, "completed"),
         or(
           isNull(results.extractionRevision),
-          ne(results.extractionRevision, EXTRACTION_REVISION),
+          ne(results.extractionRevision, EXTRACTION_STAMP),
         ),
       ),
     )

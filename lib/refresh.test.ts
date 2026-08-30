@@ -15,7 +15,7 @@ import {
   results,
   resultSources,
 } from "./db/schema";
-import { EXTRACTION_REVISION } from "./extract";
+import { EXTRACTION_STAMP } from "./extract";
 import { markAllForReextraction, refreshDerived } from "./refresh";
 
 const describeDb = hasDatabase ? describe : describe.skip;
@@ -151,7 +151,7 @@ describeDb("refreshDerived", () => {
     await refreshDerived();
 
     const [row] = await getDb().select().from(results);
-    expect(row.extractionRevision).toBe(EXTRACTION_REVISION);
+    expect(row.extractionRevision).toBe(EXTRACTION_STAMP);
   });
 
   it("rebuilds rather than accumulating when a result is re-extracted", async () => {

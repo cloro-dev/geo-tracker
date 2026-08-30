@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BRAND_CANDIDATES,
+  EXTRACTION_STAMP,
   answerText,
+  extractCandidates,
   extractMentions,
+  extractSearchQueries,
   extractSources,
   toDomain,
   type ExtractedSource,
@@ -242,5 +246,83 @@ describe("extractMentions", () => {
       [brand({ name: "Acme", aliases: ["", "  "] })],
     );
     expect(mention.mentioned).toBe(false);
+  });
+});
+
+describe("extractSearchQueries", () => {
+  it("separates what the engine searched from what it suggested", () => {
+    const queries = extractSearchQueries({
+      result: {
+        searchQueries: ["best crm 2026"],
+        related_queries: ["crm for startups"],
+      },
+    });
+    expect(queries.map((q) => [q.kind, q.query])).toEqual([
+      ["issued", "best crm 2026"],
+      ["suggested", "crm for startups"],
+    ]);
+  });
+
+  it("reads Perplexity's differently-named field as the same thing", () => {
+    const queries = extractSearchQueries({
+      result: { search_model_queries: ["find the best crm"] },
+    });
+    expect(queries).toEqual([
+      { kind: "issued", position: 1, query: "find the best crm" },
+    ]);
+  });
+
+  it("unwraps Google's related searches, which are objects not strings", () => {
+    const queries = extractSearchQueries({
+      result: { relatedSearches: [{ query: "cheap crm", link: "https://g" }] },
+    });
+    expect(queries).toEqual([
+      { kind: "suggested", position: 1, query: "cheap crm" },
+    ]);
+  });
+
+  it("drops blanks and repeats, case-insensitively", () => {
+    const queries = extractSearchQueries({
+      result: { searchQueries: ["Best CRM", "best crm", "  ", ""] },
+    });
+    expect(queries).toHaveLength(1);
+  });
+
+  it("is empty for an engine that reports no queries", () => {
+    expect(extractSearchQueries({ result: { text: "an answer" } })).toEqual([]);
+  });
+});
+
+describe("extractCandidates", () => {
+  it("ships no candidates, so it finds nothing until configured", () => {
+    expect(BRAND_CANDIDATES).toEqual([]);
+    expect(extractCandidates("Anything at all")).toEqual([]);
+  });
+
+  it("returns only the hits, never a row of zeroes", () => {
+    const found = extractCandidates("Globex leads, Globex again", [
+      "Globex",
+      "Initech",
+    ]);
+    expect(found).toEqual([{ name: "Globex", mentionCount: 2 }]);
+  });
+
+  it("uses the same word-boundary rule as a tracked brand", () => {
+    expect(extractCandidates("globexcorp ships", ["Globex"])).toEqual([]);
+    expect(extractCandidates("we use globex.com", ["Globex"])).toEqual([
+      { name: "Globex", mentionCount: 1 },
+    ]);
+  });
+
+  it("finds nothing in an answer with no prose", () => {
+    expect(extractCandidates("", ["Globex"])).toEqual([]);
+  });
+});
+
+describe("EXTRACTION_STAMP", () => {
+  it("is a stable non-negative integer that fits the column", () => {
+    expect(Number.isInteger(EXTRACTION_STAMP)).toBe(true);
+    expect(EXTRACTION_STAMP).toBeGreaterThanOrEqual(0);
+    expect(EXTRACTION_STAMP).toBeLessThanOrEqual(2147483647);
   });
 });

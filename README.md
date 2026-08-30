@@ -290,6 +290,16 @@ brand you add today has full history rather than starting at zero. The
 work happens in the scheduler tick, a batch at a time; the API response
 tells you how many results were queued.
 
+`result_search_queries` holds a third thing: the literal queries the
+engines typed before retrieving anything. ChatGPT, Copilot, Grok and
+Perplexity report these; the others do not.
+
+To watch a competitor without tracking it, add its name to
+`lib/brand-candidates.json`. Names there that turn up in answers, and that
+you are not tracking, surface as a shortlist worth adding. The file ships
+empty — geo-tracker does not guess who competes with you, and it cannot
+find a brand nobody wrote down.
+
 Nothing here scores or ranks an answer. It records whether a name is
 present. What that means is the agent's call.
 

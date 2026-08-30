@@ -66,12 +66,20 @@ const ENGINES = ["chatgpt", "perplexity", "gemini", "aimode", "google"];
 // the rest thin out — a realistic long tail for "pages to get listed on".
 const PUBLISHER_PAGES = [
   ["g2.com", "/categories/crm"],
+  ["g2.com", "/categories/help-desk"],
   ["capterra.com", "/crm-software"],
+  ["capterra.com", "/project-management"],
   ["reddit.com", "/r/sales/comments/best-crm"],
+  ["reddit.com", "/r/startups/comments/crm-recommendations"],
+  ["reddit.com", "/r/smallbusiness/comments/help-desk-picks"],
   ["techcrunch.com", "/2026/01/crm-roundup"],
   ["youtube.com", "/watch?v=crm-review"],
+  ["youtube.com", "/watch?v=crm-vs-crm-2026"],
+  ["youtube.com", "/watch?v=help-desk-teardown"],
   ["forbes.com", "/advisor/business/software/best-crm"],
   ["nytimes.com", "/wirecutter/reviews/best-crm"],
+  ["stackoverflow.com", "/questions/crm-api-integration"],
+  ["producthunt.com", "/topics/crm"],
 ];
 
 /**
@@ -87,6 +95,16 @@ const MENTION_RATE = {
   // Google writes prose only when an AI Overview was served.
   google: { Acme: 0.25, Globex: 0.4, Initech: 0.1, Umbrella: 0 },
 };
+
+/**
+ * Vendors the answers name but that nobody tracks.
+ *
+ * These exist so the "Named but not tracked" panel has something to find.
+ * To see that panel locally, copy these names into
+ * `lib/brand-candidates.json` — the file ships empty, so the panel is
+ * correctly blank until somebody says which names are worth watching.
+ */
+const UNTRACKED_VENDORS = ["Initrode", "Hooli", "Vandelay", "Soylent"];
 
 const BRAND_SITE = {
   Acme: ["acme.io", "/product"],
@@ -104,7 +122,13 @@ function answerProse(query, named) {
     (brand, index) =>
       `${index + 1}. ${brand} — a strong option for teams that care about ${pick(["price", "integrations", "onboarding", "reporting", "support"])}.`,
   );
-  return `Here are the leading tools for "${query}":\n\n${sentences.join("\n")}\n\nEach has a free tier worth trying before you commit.`;
+  // Some answers also name a vendor nobody is tracking, which is the whole
+  // point of the candidates panel.
+  const aside =
+    random() < 0.35
+      ? ` ${pick(UNTRACKED_VENDORS)} comes up often too, though it is less established.`
+      : "";
+  return `Here are the leading tools for "${query}":\n\n${sentences.join("\n")}\n\nEach has a free tier worth trying before you commit.${aside}`;
 }
 
 /**
@@ -116,7 +140,7 @@ function answerProse(query, named) {
  * citing then the two columns would agree on every row — which would hide
  * a panel that read the same column twice.
  */
-function sourceList(named, alsoCited) {
+function sourceList(named, alsoCited, promptIndex = 0) {
   const links = [...named.filter(() => random() < 0.75), ...alsoCited].map(
     (brand) => {
       const [host, path] = BRAND_SITE[brand];
@@ -127,20 +151,49 @@ function sourceList(named, alsoCited) {
     },
   );
 
+  // One answer in twelve retrieves nothing. Real engines do this, and a
+  // data-quality panel that never sees it cannot be trusted to show it.
+  if (random() < 0.08) return [];
+
+  // A window over the publisher list, offset per prompt. Neighbouring
+  // prompts overlap heavily, distant ones barely — which is what the
+  // redundancy panel is meant to show. One shared pool made every pair
+  // read 100%, and a panel that always says the same thing tests nothing.
+  const window = 8;
+  const offset = (promptIndex * 3) % PUBLISHER_PAGES.length;
+  const pool = Array.from(
+    { length: window },
+    (_, i) => PUBLISHER_PAGES[(offset + i) % PUBLISHER_PAGES.length],
+  );
+
   const publisherCount = 2 + Math.floor(random() * 4);
   for (let i = 0; i < publisherCount; i += 1) {
-    const [host, path] = pick(PUBLISHER_PAGES);
-    links.push({ url: `https://${host}${path}`, label: `Guide on ${host}` });
+    const [host, path] = pick(pool);
+    links.push({
+      url: `https://${host}${path}`,
+      label: `${host} — ${path.split("/").pop().replace(/[-?=]/g, " ").trim()}`,
+    });
   }
 
   return links.map((link, index) => ({ position: index + 1, ...link }));
 }
 
+/** The queries an engine says it ran, and the follow-ups it offers. */
+function queryFanOut(query) {
+  const issued = [
+    query,
+    `${query} ${pick(["2026", "reviews", "pricing", "vs"])}`,
+  ];
+  const suggested = [`best ${pick(["free", "cheap", "enterprise"])} ${query}`];
+  return { issued, suggested };
+}
+
 /** The payload shape cloro returns, per engine. */
-function buildResponse(engine, query, named, alsoCited) {
-  const sources = sourceList(named, alsoCited);
+function buildResponse(engine, query, named, alsoCited, promptIndex) {
+  const sources = sourceList(named, alsoCited, promptIndex);
 
   if (engine !== "google") {
+    const fanOut = queryFanOut(query);
     return {
       success: true,
       result: {
@@ -152,6 +205,18 @@ function buildResponse(engine, query, named, alsoCited) {
           label: source.label,
           domain: new URL(source.url).hostname,
         })),
+        // Only some engines report what they searched. Perplexity names the
+        // field differently, and Gemini reports nothing at all — so a panel
+        // that pooled them would quietly under-count.
+        ...(engine === "chatgpt" || engine === "copilot"
+          ? { searchQueries: fanOut.issued }
+          : {}),
+        ...(engine === "perplexity"
+          ? {
+              search_model_queries: fanOut.issued,
+              related_queries: fanOut.suggested,
+            }
+          : {}),
       },
     };
   }
@@ -178,6 +243,9 @@ function buildResponse(engine, query, named, alsoCited) {
           link: "https://g2.com/categories/crm",
           title: "Category overview",
         },
+      ],
+      relatedSearches: [
+        { query: `${query} pricing`, link: "https://google.com/search" },
       ],
     },
   };
@@ -207,7 +275,7 @@ async function main() {
   let results = 0;
   let failures = 0;
 
-  for (const prompt of PROMPTS) {
+  for (const [promptIndex, prompt] of PROMPTS.entries()) {
     const { rows } = await pool.query(
       `INSERT INTO prompts (name, prompt, engines, runs_per_day, enabled)
        VALUES ($1, $2, $3, 1, false)
@@ -248,7 +316,9 @@ async function main() {
             promptId,
             engine,
             `seed_${++results}`,
-            JSON.stringify(buildResponse(engine, prompt, named, alsoCited)),
+            JSON.stringify(
+              buildResponse(engine, prompt, named, alsoCited, promptIndex),
+            ),
             1 + Math.floor(random() * 4),
             completedAt,
           ],

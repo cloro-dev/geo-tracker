@@ -153,6 +153,14 @@ change, and the whole history is re-derived on its own.
 Extraction runs in the app, not in the database. Neon's free tier has no
 `pg_cron`, so a materialised view would have nothing to refresh it.
 
+`lib/brand-candidates.json` is a fourth extraction input, and the only one
+that is a FILE rather than a table. Nothing can call
+`markAllForReextraction()` when a file changes, so `EXTRACTION_STAMP`
+folds the sorted candidate list into the value written to
+`results.extraction_revision`. An edited file simply stops matching what is
+stored and the next tick re-derives on its own. That column holds a
+fingerprint of the extraction inputs, not a version number.
+
 `scripts/seed.mjs` fills a local database with synthetic answers so the
 Grafana panels can be built without waiting a month for real data. It
 writes prompts, brands and raw results, and derives nothing: run the tick

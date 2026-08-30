@@ -59,6 +59,22 @@ It also reads `result_sources` and `result_brand_mentions`, which the
 scheduler tick fills. A freshly imported dashboard is empty until a tick
 has run — that is a queue waiting, not a broken panel.
 
+### Watching brands you do not track yet
+
+`lib/brand-candidates.json` holds names to look for **without** tracking
+them. Anything listed there that an answer names, and that is not in your
+`brands` table, appears in the "Named but not tracked" panel — the
+shortlist worth promoting.
+
+It ships empty, so that panel is blank until you fill it in. Put the
+vendors in your category there, in the spellings an engine would write.
+Editing the file re-derives the whole history on the next tick, so a name
+added today is scored against answers already stored.
+
+It cannot discover a brand nobody wrote down. That is deliberate: finding
+unknown names in prose means entity extraction, and geo-tracker does not
+interpret answers — it records whether a name you chose is present.
+
 Two things the panels are built to keep apart:
 
 - **Named and cited are different outcomes.** An answer can recommend you

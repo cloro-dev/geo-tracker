@@ -15,6 +15,13 @@
       "when": 1788077219316,
       "tag": "0001_hot_moonstone",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788089565249,
+      "tag": "0002_freezing_sumo",
+      "breakpoints": true
     }
   ]
 }
