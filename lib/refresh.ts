@@ -44,6 +44,21 @@ export interface RefreshSummary {
 }
 
 /**
+ * The brand fields the extractor actually reads.
+ *
+ * `isOwn` is absent on purpose: it labels a brand as yours for the panels,
+ * and the extractor treats every brand identically, so flipping it changes
+ * no derived row. Re-deriving the whole history for a cosmetic edit would
+ * be pure waste.
+ */
+const EXTRACTION_INPUTS = ["name", "aliases", "domains", "enabled"] as const;
+
+/** Whether a brand edit changes what the extractor would produce. */
+export function affectsExtraction(changed: Record<string, unknown>): boolean {
+  return EXTRACTION_INPUTS.some((field) => field in changed);
+}
+
+/**
  * Queue every completed result for re-extraction.
  *
  * Call this after any change to the brand list. A brand's mentions are

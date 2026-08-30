@@ -167,6 +167,11 @@ All endpoints except the webhook require
 | `DELETE` | `/api/prompts/:id`     | Delete a prompt and (cascade) its results                                           |
 | `POST`   | `/api/prompts/:id/run` | Submit the prompt to its engines now; returns pending task ids (202)                |
 | `GET`    | `/api/results`         | Query results (filters below)                                                       |
+| `GET`    | `/api/brands`          | List tracked brands                                                                 |
+| `POST`   | `/api/brands`          | Track a brand (`name`, `aliases[]`, `domains[]`, `isOwn`, `enabled`)                |
+| `GET`    | `/api/brands/:id`      | Get one brand                                                                       |
+| `PATCH`  | `/api/brands/:id`      | Update any subset of the brand fields                                               |
+| `DELETE` | `/api/brands/:id`      | Delete a brand and (cascade) its mention rows                                       |
 | `GET`    | `/api/cron`            | Scheduler tick — same bearer token                                                  |
 | `POST`   | `/api/webhook`         | cloro result callback — auth via token in the callback URL                          |
 | `*`      | `/api/mcp`             | MCP endpoint (Streamable HTTP)                                                      |
@@ -185,13 +190,17 @@ The MCP endpoint is the primary way to use geo-tracker. It is not a
 read-only reporting layer: an agent can create prompts, trigger runs and
 pull the stored answers, which is the whole product surface.
 
-| Tool            | What the agent can do                                 |
-| --------------- | ----------------------------------------------------- |
-| `list_prompts`  | See what is being tracked, and when each last ran     |
-| `create_prompt` | Add a prompt, pick the engines, set how often it runs |
-| `run_prompt`    | Run one now instead of waiting for the schedule       |
-| `get_results`   | Query runs by prompt, engine or status                |
-| `get_result`    | Pull one full raw engine answer for analysis          |
+| Tool                   | What the agent can do                                 |
+| ---------------------- | ----------------------------------------------------- |
+| `list_prompts`         | See what is being tracked, and when each last ran     |
+| `create_prompt`        | Add a prompt, pick the engines, set how often it runs |
+| `run_prompt`           | Run one now instead of waiting for the schedule       |
+| `get_results`          | Query runs by prompt, engine or status                |
+| `get_result`           | Pull one full raw engine answer for analysis          |
+| `list_brands`          | See which brands are being looked for                 |
+| `track_brand`          | Start looking for a brand, with aliases and domains   |
+| `untrack_brand`        | Stop looking for one, and drop its derived rows       |
+| `get_brand_visibility` | How often each brand was named, and cited             |
 
 Things worth asking an agent once it is connected:
 
@@ -253,11 +262,46 @@ The same tick also sweeps: pending results whose webhook was missed are
 polled from the cloro API and backfilled, so nothing is lost if a webhook
 delivery fails.
 
+## Brand visibility
+
+Tell geo-tracker which brands to look for, and every answer is flattened
+into two tables you can query or chart:
+
+```bash
+curl -X POST https://<your-app>.vercel.app/api/brands \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "content-type: application/json" \
+  -d '{"name":"Acme","aliases":["Acme Corp"],"domains":["acme.io"],"isOwn":true}'
+```
+
+- `result_sources` — one row per link an engine returned, tagged by where
+  it came from (`source`, `citation_pill`, `organic`, `ad`, …). This is
+  the "which pages get cited" question.
+- `result_brand_mentions` — one row per answer per brand, including the
+  brands that were **not** named. That is what makes share of voice
+  computable: a brand at 0% has rows saying so, rather than being absent.
+
+Being **named** in the prose and being **cited** as a link are stored
+separately, because they are different outcomes — an answer can recommend
+you without linking you, or link you without naming you.
+
+Adding or editing a brand re-scores every answer already stored, so a
+brand you add today has full history rather than starting at zero. The
+work happens in the scheduler tick, a batch at a time; the API response
+tells you how many results were queued.
+
+Nothing here scores or ranks an answer. It records whether a name is
+present. What that means is the agent's call.
+
 ## Grafana
 
 A ready-made dashboard (run volume, success rate, credits burn, failures)
 lives in [`grafana/`](./grafana/README.md) — point Grafana Cloud's free
 tier at your Postgres and import one JSON file.
+
+Grafana runs outside Vercel: it is a long-running server, and Vercel hosts
+serverless functions. Grafana Cloud's free tier reads your database
+directly over TLS, which is all this needs.
 
 ## Local development
 
