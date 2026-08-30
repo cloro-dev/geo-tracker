@@ -1,0 +1,786 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_POSTGRES",
+      "label": "Postgres",
+      "description": "The Postgres database geo-tracker writes to",
+      "type": "datasource",
+      "pluginId": "grafana-postgresql-datasource",
+      "pluginName": "PostgreSQL"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "datasource",
+      "id": "grafana-postgresql-datasource",
+      "name": "PostgreSQL",
+      "version": "1.0.0"
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "id": null,
+  "links": [],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["geo-tracker"],
+  "templating": {
+    "list": [
+      {
+        "name": "engine",
+        "label": "Engine",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "${DS_POSTGRES}"
+        },
+        "query": "SELECT DISTINCT engine FROM results ORDER BY 1;",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": null,
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "options": []
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timezone": "utc",
+  "title": "geo-tracker — brand visibility",
+  "uid": null,
+  "version": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Named in answers",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS value\n  FROM result_brand_mentions m\n  JOIN brands b ON b.id = m.brand_id\n  JOIN results r ON r.id = m.result_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring}) AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1);"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "description": "Share of completed answers whose text names your brand. The denominator is every answer, so this cannot flatter you by dropping the runs that ignored you."
+    },
+    {
+      "type": "stat",
+      "title": "Cited in answers",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS value\n  FROM result_brand_mentions m\n  JOIN brands b ON b.id = m.brand_id\n  JOIN results r ON r.id = m.result_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring}) AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1);"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "description": "Share of answers that linked one of your own domains. Being cited and being named are different outcomes: an answer can recommend you without linking you, or link you without naming you."
+    },
+    {
+      "type": "stat",
+      "title": "Share of voice",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT round(100.0 * count(*) FILTER (WHERE m.mentioned AND b.is_own)\n    / greatest(count(*) FILTER (WHERE m.mentioned), 1), 1) AS value\n  FROM result_brand_mentions m\n  JOIN brands b ON b.id = m.brand_id\n  JOIN results r ON r.id = m.result_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring});"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "description": "Your mentions as a share of ALL tracked brands' mentions. Moves when a competitor gains ground even if your own rate is flat — which is the point of tracking it separately from 'Named in answers'."
+    },
+    {
+      "type": "stat",
+      "title": "Answers analysed",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(DISTINCT r.id) AS value\n  FROM results r\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring});"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "description": "Completed runs in the selected range. Failed runs are excluded everywhere: a scrape that errored is not an answer that declined to name you."
+    },
+    {
+      "type": "table",
+      "title": "Brand ranking — named and cited",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "id": 5,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT b.name || CASE WHEN b.is_own THEN ' (us)' ELSE '' END AS \"Brand\",\n    count(*) AS \"Answers\",\n    round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS \"Named %\",\n    round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS \"Cited %\"\n  FROM result_brand_mentions m\n  JOIN brands b ON b.id = m.brand_id\n  JOIN results r ON r.id = m.result_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring})\n  GROUP BY b.id, b.name, b.is_own\n  ORDER BY \"Named %\" DESC;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Answers.*|Prompts"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*%"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "description": "Every tracked brand, including the ones never named — they hold a row at 0% rather than disappearing. A brand with a high Cited % and a low Named % is being used as a source without being recommended."
+    },
+    {
+      "type": "timeseries",
+      "title": "Visibility over time — every tracked brand",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "id": 6,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('day', r.completed_at) AS \"time\",\n    b.name AS metric,\n    round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS value\n  FROM result_brand_mentions m\n  JOIN brands b ON b.id = m.brand_id\n  JOIN results r ON r.id = m.result_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring})\n  GROUP BY 1, b.name\n  ORDER BY 1;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "showPoints": "auto",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Daily share of answers naming each brand. A day with few runs swings hard — check 'Answers analysed' before reading a spike as a trend."
+    },
+    {
+      "type": "barchart",
+      "title": "Our visibility by engine",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 7,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT r.engine AS \"Engine\",\n    round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS \"Named %\",\n    round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS \"Cited %\"\n  FROM result_brand_mentions m\n  JOIN brands b ON b.id = m.brand_id\n  JOIN results r ON r.id = m.result_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring}) AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)\n  GROUP BY r.engine\n  ORDER BY \"Named %\" DESC;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "xField": "Engine",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "horizontal"
+      },
+      "description": "Google is expected to sit low on Named %: it returns a page of links, and only writes prose when an AI Overview was served. Its Cited % is the meaningful number there."
+    },
+    {
+      "type": "table",
+      "title": "Every prompt — how we do on each",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 8,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT p.name AS \"Prompt\",\n    count(*) AS \"Answers\",\n    round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS \"Named %\",\n    round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS \"Cited %\"\n  FROM result_brand_mentions m\n  JOIN brands b ON b.id = m.brand_id\n  JOIN results r ON r.id = m.result_id\n  JOIN prompts p ON p.id = r.prompt_id\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring}) AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)\n  GROUP BY p.id, p.name\n  ORDER BY \"Named %\" ASC;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Answers.*|Prompts"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*%"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "description": "Sorted worst first: the prompts at the top are the ones you are losing. Joined through the prompt, so a prompt you disabled still shows its history."
+    },
+    {
+      "type": "table",
+      "title": "Pages to get listed on",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "id": 9,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT s.domain AS \"Domain\",\n    count(DISTINCT s.result_id) AS \"Answers citing it\",\n    count(DISTINCT r.prompt_id) AS \"Prompts\",\n    round(100.0 * count(DISTINCT s.result_id) FILTER (WHERE own.mentioned)\n      / greatest(count(DISTINCT s.result_id), 1), 1) AS \"Named us %\"\n  FROM result_sources s\n  JOIN results r ON r.id = s.result_id\n  LEFT JOIN result_brand_mentions own\n    ON own.result_id = s.result_id AND own.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring})\n    AND s.domain NOT IN (SELECT unnest(domains) FROM brands)\n  GROUP BY s.domain\n  ORDER BY \"Answers citing it\" DESC\n  LIMIT 30;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Answers.*|Prompts"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*%"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Named us %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "description": "Third-party pages the engines retrieved for your prompts, with how often you were named in those same answers. Your own domains are excluded — they are the panel below. A domain cited constantly where 'Named us %' is low is the clearest place to go earn a listing."
+    },
+    {
+      "type": "table",
+      "title": "Our own pages — retrieved, and did the answer name us?",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "${DS_POSTGRES}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "id": 10,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "${DS_POSTGRES}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT s.domain AS \"Domain\",\n    s.kind AS \"Cited as\",\n    count(DISTINCT s.result_id) AS \"Answers citing it\",\n    round(100.0 * count(DISTINCT s.result_id) FILTER (WHERE own.mentioned)\n      / greatest(count(DISTINCT s.result_id), 1), 1) AS \"Named us %\"\n  FROM result_sources s\n  JOIN results r ON r.id = s.result_id\n  LEFT JOIN result_brand_mentions own\n    ON own.result_id = s.result_id AND own.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)\n  WHERE r.status = 'completed'\n    AND $__timeFilter(r.completed_at)\n    AND r.engine IN (${engine:sqlstring})\n    AND s.domain IN (\n      SELECT unnest(domains) FROM brands WHERE is_own AND enabled\n    )\n  GROUP BY s.domain, s.kind\n  ORDER BY \"Answers citing it\" DESC;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Answers.*|Prompts"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*%"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Named us %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "description": "Your pages that engines actually retrieved. 'Cited as' matters: a link that only ever appears as an ad is not the same win as one in the source rail. Empty means no engine has retrieved your site for these prompts."
+    }
+  ]
+}

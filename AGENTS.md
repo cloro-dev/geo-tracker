@@ -153,6 +153,13 @@ change, and the whole history is re-derived on its own.
 Extraction runs in the app, not in the database. Neon's free tier has no
 `pg_cron`, so a materialised view would have nothing to refresh it.
 
+`scripts/seed.mjs` fills a local database with synthetic answers so the
+Grafana panels can be built without waiting a month for real data. It
+writes prompts, brands and raw results, and derives nothing: run the tick
+afterwards and the app fills the derived tables through the code that runs
+in production. Prompts are seeded disabled, because an enabled prompt is
+due the moment it exists and the tick would submit it to the real API.
+
 ## Out of scope
 
 Do not add a web UI or a login system. Keep the dependency list small:
@@ -168,3 +175,13 @@ hostname comparison. It decides _whether a name is present_, never how
 good an answer is, who is winning, or which brands are worth tracking. A
 sentiment score, a quality grade, a recommendation, or a built-in list of
 competitors would all cross it.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
