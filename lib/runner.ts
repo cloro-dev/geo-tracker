@@ -3,6 +3,7 @@ import { and, asc, eq, isNotNull, isNull, lt, lte, or } from "drizzle-orm";
 import { fetchTask, submitTask } from "./cloro";
 import { getDb } from "./db";
 import { prompts, results, type NewResult, type Prompt } from "./db/schema";
+import { refreshDerived, type RefreshSummary } from "./refresh";
 import { webhookCallbackUrl } from "./webhooks";
 import type { Engine } from "./engines";
 
@@ -76,6 +77,7 @@ export async function submitPromptOnce(
 export interface TickSummary {
   submitted: { promptId: string; name: string; results: SubmittedResult[] }[];
   sweep: { checked: number; updated: number; timedOut: number };
+  refresh: RefreshSummary;
 }
 
 /**
@@ -83,6 +85,12 @@ export interface TickSummary {
  * pending rows by polling. Due-logic: a prompt with runsPerDay=N is due when
  * its last run is at least 24h/N (minus slack) old, so any external tick
  * frequency works — granularity is simply capped by how often ticks arrive.
+ *
+ * The derived-table refresh runs last, on purpose: it is the only step that
+ * can be cut short without losing anything. Submissions are time-sensitive
+ * and the sweep closes out rows the webhook missed, so if the function runs
+ * out of budget it must run out here, where the leftover work is still
+ * queued in a column and the next tick resumes it.
  */
 export async function runTick(): Promise<TickSummary> {
   const db = getDb();
@@ -120,7 +128,8 @@ export async function runTick(): Promise<TickSummary> {
     });
   }
 
-  return { submitted, sweep: await sweepPending() };
+  const sweep = await sweepPending();
+  return { submitted, sweep, refresh: await refreshDerived() };
 }
 
 /**

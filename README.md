@@ -34,7 +34,8 @@ That one sentence is a `create_prompt` call, a `run_prompt` call and a
   add prompts, run them and query the answers without a human in the loop.
 - **Your data, queryable** — plain Postgres, so an agent can also read it
   with SQL, and the [Grafana starter](./grafana/README.md) charts it.
-- **$0 to run** — fits in Vercel's free tier, database included.
+- **$0 to run** — fits in Vercel's free tier, database included, until the
+  derived tables outgrow it (see [Data & retention](#data--retention)).
 - **Fully async** — scrapes are submitted as
   [cloro async tasks](https://cloro.dev/docs) and results come back by
   webhook, so no serverless function ever waits on a scrape.
@@ -167,6 +168,11 @@ All endpoints except the webhook require
 | `DELETE` | `/api/prompts/:id`     | Delete a prompt and (cascade) its results                                           |
 | `POST`   | `/api/prompts/:id/run` | Submit the prompt to its engines now; returns pending task ids (202)                |
 | `GET`    | `/api/results`         | Query results (filters below)                                                       |
+| `GET`    | `/api/brands`          | List tracked brands                                                                 |
+| `POST`   | `/api/brands`          | Track a brand (`name`, `aliases[]`, `domains[]`, `isOwn`, `enabled`)                |
+| `GET`    | `/api/brands/:id`      | Get one brand                                                                       |
+| `PATCH`  | `/api/brands/:id`      | Update any subset of the brand fields                                               |
+| `DELETE` | `/api/brands/:id`      | Delete a brand and (cascade) its mention rows                                       |
 | `GET`    | `/api/cron`            | Scheduler tick — same bearer token                                                  |
 | `POST`   | `/api/webhook`         | cloro result callback — auth via token in the callback URL                          |
 | `*`      | `/api/mcp`             | MCP endpoint (Streamable HTTP)                                                      |
@@ -185,13 +191,17 @@ The MCP endpoint is the primary way to use geo-tracker. It is not a
 read-only reporting layer: an agent can create prompts, trigger runs and
 pull the stored answers, which is the whole product surface.
 
-| Tool            | What the agent can do                                 |
-| --------------- | ----------------------------------------------------- |
-| `list_prompts`  | See what is being tracked, and when each last ran     |
-| `create_prompt` | Add a prompt, pick the engines, set how often it runs |
-| `run_prompt`    | Run one now instead of waiting for the schedule       |
-| `get_results`   | Query runs by prompt, engine or status                |
-| `get_result`    | Pull one full raw engine answer for analysis          |
+| Tool                   | What the agent can do                                 |
+| ---------------------- | ----------------------------------------------------- |
+| `list_prompts`         | See what is being tracked, and when each last ran     |
+| `create_prompt`        | Add a prompt, pick the engines, set how often it runs |
+| `run_prompt`           | Run one now instead of waiting for the schedule       |
+| `get_results`          | Query runs by prompt, engine or status                |
+| `get_result`           | Pull one full raw engine answer for analysis          |
+| `list_brands`          | See which brands are being looked for                 |
+| `track_brand`          | Start looking for a brand, with aliases and domains   |
+| `untrack_brand`        | Stop looking for one, and drop its derived rows       |
+| `get_brand_visibility` | How often each brand was named, and cited             |
 
 Things worth asking an agent once it is connected:
 
@@ -253,11 +263,79 @@ The same tick also sweeps: pending results whose webhook was missed are
 polled from the cloro API and backfilled, so nothing is lost if a webhook
 delivery fails.
 
+## Brand visibility
+
+Tell geo-tracker which brands to look for, and every answer is flattened
+into two tables you can query or chart:
+
+```bash
+curl -X POST https://<your-app>.vercel.app/api/brands \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "content-type: application/json" \
+  -d '{"name":"Acme","aliases":["Acme Corp"],"domains":["acme.io"],"isOwn":true}'
+```
+
+- `result_sources` — one row per link an engine returned, tagged by where
+  it came from (`source`, `citation_pill`, `organic`, `ad`, …). This is
+  the "which pages get cited" question.
+- `result_brand_mentions` — one row per answer per brand, including the
+  brands that were **not** named. That is what makes share of voice
+  computable: a brand at 0% has rows saying so, rather than being absent.
+
+Being **named** in the prose and being **cited** as a link are stored
+separately, because they are different outcomes — an answer can recommend
+you without linking you, or link you without naming you.
+
+Adding or editing a brand re-scores every answer already stored, so a
+brand you add today has full history rather than starting at zero. The
+work happens in the scheduler tick, a batch at a time; the API response
+tells you how many results are queued.
+
+**A deployment with history takes a while to catch up.** The tick derives
+250 results, and Vercel's Hobby plan runs one cron a day — so re-deriving
+a year of answers would take months of ticks. Two ways round it, and the
+tick is idempotent so either is safe:
+
+- Point an external scheduler (GitHub Actions, cron-job.org) at
+  `/api/cron` every few minutes until `more` comes back `false`.
+- Or call it by hand in a loop:
+
+  ```bash
+  while curl -s -H "Authorization: Bearer $CRON_SECRET" \
+    https://<your-app>.vercel.app/api/cron | grep -q '"more":true'; do :; done
+  ```
+
+Nothing is missing while it runs. The old rows stay until each result is
+rebuilt, so the dashboard shows values that are stale, never blank.
+
+`result_search_queries` holds a third thing: the literal queries the
+engines typed before retrieving anything. ChatGPT, Copilot, Grok and
+Perplexity report these; the others do not.
+
+To watch a competitor without tracking it, add its name to
+`lib/brand-candidates.json`, with any alternative spellings:
+
+```json
+{ "name": "Acme", "aliases": ["Acme, Inc", "Acme Corp"] }
+```
+
+Names there that turn up in answers, and that you are not tracking,
+surface as a shortlist worth adding. The file ships with fictional
+placeholders to replace — geo-tracker does not guess who competes with
+you, and it cannot find a brand nobody wrote down.
+
+Nothing here scores or ranks an answer. It records whether a name is
+present. What that means is the agent's call.
+
 ## Grafana
 
 A ready-made dashboard (run volume, success rate, credits burn, failures)
 lives in [`grafana/`](./grafana/README.md) — point Grafana Cloud's free
 tier at your Postgres and import one JSON file.
+
+Grafana runs outside Vercel: it is a long-running server, and Vercel hosts
+serverless functions. Grafana Cloud's free tier reads your database
+directly over TLS, which is all this needs.
 
 ## Local development
 
@@ -286,17 +364,29 @@ so just hit `/api/cron` again after a scrape completes.
 
 ## Data & retention
 
-Two tables: `prompts` and `results`. Each run stores one row per engine
-with the full raw cloro response as `jsonb` — measured at **10–30 KB per
-row**, so budget roughly 20 KB per engine per run.
+Two tables hold what you asked and what came back: `prompts` and
+`results`. Each run stores one row per engine with the full raw cloro
+response as `jsonb` — measured at **10–30 KB per row**, so budget roughly
+20 KB per engine per run.
 
-Storage is the limit you hit first, well before anything on Vercel:
+Four more are derived from those responses by the scheduler tick
+(`result_sources`, `result_brand_mentions`, `result_search_queries`,
+`result_candidate_mentions`). They add about **5 KB per answer**, so
+budget ~25 KB per engine per run in total. That figure scales with how
+many links an answer carries, not with how big its payload is, so a chatty
+engine costs more here than a terse one with a large HTML blob.
+
+Storage is the limit you hit first, well before anything on Vercel. The
+figures below include the derived rows:
 
 | Workload                       | Scrapes/day | Storage/month | 0.5 GB lasts |
 | ------------------------------ | ----------- | ------------- | ------------ |
-| 10 prompts × 3 engines × 1/day | 30          | ~18 MB        | over 2 years |
-| 20 prompts × 4 engines × 4/day | 320         | ~190 MB       | ~3 months    |
-| 50 prompts × 6 engines × 8/day | 2,400       | ~1.4 GB       | ~2 weeks     |
+| 10 prompts × 3 engines × 1/day | 30          | ~23 MB        | ~1.8 years   |
+| 20 prompts × 4 engines × 4/day | 320         | ~240 MB       | ~2 months    |
+| 50 prompts × 6 engines × 8/day | 2,400       | ~1.8 GB       | ~8 days      |
+
+Deleting a result cascades to its derived rows, so a retention policy
+needs no extra step.
 
 The same workloads use under 1%, 1% and 7% of Vercel's free monthly
 function invocations, so the compute side stays free throughout.

@@ -19,8 +19,11 @@ export async function applyMigrations(): Promise<void> {
 }
 
 export async function resetTables(): Promise<void> {
+  // `brands` is listed even though CASCADE would reach the derived tables
+  // anyway: truncating results alone leaves brand rows behind, and a test
+  // that adds a brand would then see the previous test's brands too.
   await getDb().execute(
-    sql`TRUNCATE results, prompts RESTART IDENTITY CASCADE`,
+    sql`TRUNCATE results, prompts, brands, extraction_state RESTART IDENTITY CASCADE`,
   );
 }
 

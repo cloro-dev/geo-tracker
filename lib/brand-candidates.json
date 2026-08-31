@@ -1,0 +1,42 @@
+{
+  "note": "Names to WATCH FOR but not track. Anything listed here that an answer names, and that is not in your `brands` table, shows up in the dashboard's 'Named but not tracked' panel — the shortlist of competitors worth adding. Matching is literal and case-insensitive, the same rule the brands table uses. Give each candidate the spellings an engine would actually write: the bare name, the legal form, and any domain people say out loud. Every alias counts toward the same candidate, so 'Acme' and 'Acme, Inc' report as one row. A plain string works as shorthand when a name needs no aliases. Editing this file re-derives the whole history on the next scheduler tick, so a name added today is scored against answers already stored. THE NAMES BELOW ARE PLACEHOLDERS — fictional companies, there to show the shape and to give the seeded demo something to find. Replace every one of them with the real vendors in your category.",
+  "candidates": [
+    {
+      "name": "Initrode",
+      "aliases": ["Initrode LLC"]
+    },
+    {
+      "name": "Hooli",
+      "aliases": ["Hooli Inc", "Hooli XYZ", "hooli.com"]
+    },
+    {
+      "name": "Vandelay",
+      "aliases": ["Vandelay Industries", "Vandelay Inc"]
+    },
+    {
+      "name": "Soylent",
+      "aliases": ["Soylent Corp", "Soylent Corporation"]
+    },
+    {
+      "name": "Cyberdyne",
+      "aliases": ["Cyberdyne Systems"]
+    },
+    {
+      "name": "Tyrell",
+      "aliases": ["Tyrell Corp", "Tyrell Corporation"]
+    },
+    {
+      "name": "Aperture",
+      "aliases": ["Aperture Science"]
+    },
+    {
+      "name": "Massive Dynamic",
+      "aliases": ["MassiveDynamic"]
+    },
+    {
+      "name": "Gringotts",
+      "aliases": []
+    },
+    "Nakatomi"
+  ]
+}

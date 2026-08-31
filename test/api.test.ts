@@ -14,6 +14,11 @@ import {
   vi,
 } from "vitest";
 
+import {
+  DELETE as brandDelete,
+  PATCH as brandPatch,
+} from "../app/api/brands/[id]/route";
+import { GET as brandsGet, POST as brandsPost } from "../app/api/brands/route";
 import { GET as cronGet } from "../app/api/cron/route";
 import { DELETE, GET as promptGet, PATCH } from "../app/api/prompts/[id]/route";
 import { POST as runPost } from "../app/api/prompts/[id]/run/route";
@@ -36,6 +41,23 @@ const authed = (path: string, init: RequestInit = {}) =>
 
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 
+const webhookToken = () =>
+  createHmac("sha256", SECRET)
+    .update("geo-tracker:webhook")
+    .digest("hex")
+    .slice(0, 32);
+
+/** A completed-task delivery carrying a ChatGPT-shaped answer. */
+const completedWebhook = (taskId: string, text: string) =>
+  new Request(`${BASE}/api/webhook?token=${webhookToken()}`, {
+    method: "POST",
+    body: JSON.stringify({
+      task: { id: taskId, status: "COMPLETED" },
+      credits: { creditsCharged: 1 },
+      response: { success: true, result: { text, sources: [] } },
+    }),
+  });
+
 async function createPrompt(body: Record<string, unknown> = {}) {
   const res = await promptsPost(
     authed("/api/prompts", {
@@ -50,6 +72,23 @@ async function createPrompt(body: Record<string, unknown> = {}) {
     params(""),
   );
   return { res, body: (await res.json()) as { prompt: { id: string } } };
+}
+
+async function createBrand(body: Record<string, unknown> = {}) {
+  const res = await brandsPost(
+    authed("/api/brands", {
+      method: "POST",
+      body: JSON.stringify({ name: "Acme", ...body }),
+    }),
+    params(""),
+  );
+  return {
+    res,
+    body: (await res.json()) as {
+      brand: { id: string };
+      queuedForExtraction: number;
+    },
+  };
 }
 
 describe.skipIf(!hasDatabase)("API routes (need a database)", () => {
@@ -219,11 +258,7 @@ describe.skipIf(!hasDatabase)("API routes (need a database)", () => {
   });
 
   describe("webhook", () => {
-    const token = () =>
-      createHmac("sha256", SECRET)
-        .update("geo-tracker:webhook")
-        .digest("hex")
-        .slice(0, 32);
+    const token = webhookToken;
 
     async function pendingTaskId() {
       const { body } = await createPrompt();
@@ -313,6 +348,109 @@ describe.skipIf(!hasDatabase)("API routes (need a database)", () => {
         updated: 0,
         timedOut: 0,
       });
+      // Nothing is configured, so the refresh declines to derive anything.
+      expect(summary.refresh).toMatchObject({ extracted: 0, skipped: true });
+    });
+  });
+
+  describe("brands", () => {
+    it("creates a brand and returns 201", async () => {
+      const { res, body } = await createBrand({ domains: ["acme.io"] });
+      expect(res.status).toBe(201);
+      expect(body.brand).toMatchObject({ name: "Acme", isOwn: false });
+    });
+
+    it("normalises a domain to a bare lowercase host", async () => {
+      const { body } = await createBrand({ domains: ["WWW.Acme.IO"] });
+      expect(body.brand).toMatchObject({ domains: ["acme.io"] });
+    });
+
+    it("rejects a URL where a domain belongs", async () => {
+      const { res } = await createBrand({ domains: ["https://acme.io/blog"] });
+      expect(res.status).toBe(400);
+    });
+
+    it("treats a name that differs only in case as the same brand", async () => {
+      await createBrand({ name: "Acme" });
+      const { res } = await createBrand({ name: "acme" });
+      expect(res.status).toBe(409);
+    });
+
+    it("lists brands by name", async () => {
+      await createBrand({ name: "Globex" });
+      await createBrand({ name: "Acme" });
+      const res = await brandsGet(authed("/api/brands"), params(""));
+      const body = (await res.json()) as { brands: { name: string }[] };
+      expect(body.brands.map((b) => b.name)).toEqual(["Acme", "Globex"]);
+    });
+
+    it("queues the stored history when a brand is added", async () => {
+      await createPrompt();
+      await cronGet(authed("/api/cron"), params(""));
+      await webhookPost(completedWebhook("task_1", "Acme wins."), params(""));
+
+      const { body } = await createBrand();
+      expect(body.queuedForExtraction).toBe(1);
+
+      // The next tick derives it, so the brand's chart starts full.
+      const res = await cronGet(authed("/api/cron"), params(""));
+      const summary = await res.json();
+      expect(summary.refresh).toMatchObject({ extracted: 1, skipped: false });
+    });
+
+    it("re-queues history when an edit changes what is matched", async () => {
+      await createPrompt();
+      await cronGet(authed("/api/cron"), params(""));
+      await webhookPost(completedWebhook("task_1", "Acme wins."), params(""));
+      const { body } = await createBrand();
+      await cronGet(authed("/api/cron"), params(""));
+
+      const res = await brandPatch(
+        authed(`/api/brands/${body.brand.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ aliases: ["Acme Corp"] }),
+        }),
+        params(body.brand.id),
+      );
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toMatchObject({
+        queuedForExtraction: 1,
+      });
+    });
+
+    it("does not re-queue history for a label-only edit", async () => {
+      await createPrompt();
+      await cronGet(authed("/api/cron"), params(""));
+      await webhookPost(completedWebhook("task_1", "Acme wins."), params(""));
+      const { body } = await createBrand();
+
+      const res = await brandPatch(
+        authed(`/api/brands/${body.brand.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ isOwn: true }),
+        }),
+        params(body.brand.id),
+      );
+      await expect(res.json()).resolves.toMatchObject({
+        brand: { isOwn: true },
+        queuedForExtraction: 0,
+      });
+    });
+
+    it("404s on an unknown brand and 400s on a malformed id", async () => {
+      const missing = await brandDelete(
+        authed("/api/brands/00000000-0000-4000-8000-000000000000", {
+          method: "DELETE",
+        }),
+        params("00000000-0000-4000-8000-000000000000"),
+      );
+      expect(missing.status).toBe(404);
+
+      const malformed = await brandDelete(
+        authed("/api/brands/nope", { method: "DELETE" }),
+        params("nope"),
+      );
+      expect(malformed.status).toBe(400);
     });
   });
 });

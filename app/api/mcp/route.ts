@@ -1,12 +1,15 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 
 import { isApiKeyAuthorized, unauthorized } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { prompts, results } from "@/lib/db/schema";
+import { brands, prompts, resultBrandMentions, results } from "@/lib/db/schema";
 import { ENGINES } from "@/lib/engines";
+import { isUniqueViolation } from "@/lib/http";
+import { markAllForReextraction } from "@/lib/refresh";
 import { submitPromptOnce } from "@/lib/runner";
+import { createBrandSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
@@ -119,6 +122,121 @@ const handler = createMcpHandler(
           .where(conditions.length > 0 ? and(...conditions) : undefined)
           .orderBy(desc(results.createdAt))
           .limit(limit);
+        return text(rows);
+      },
+    );
+
+    server.registerTool(
+      "list_brands",
+      {
+        title: "List brands",
+        description:
+          "List the brands being looked for in answers, with their aliases and domains.",
+        inputSchema: z.object({}),
+      },
+      async () => {
+        const rows = await getDb()
+          .select()
+          .from(brands)
+          .orderBy(asc(brands.name));
+        return text(rows);
+      },
+    );
+
+    server.registerTool(
+      "track_brand",
+      {
+        title: "Track a brand",
+        description:
+          "Start looking for a brand in answers. Aliases are extra spellings that count as the same brand; domains decide when a link counts as citing it. Every answer already stored is re-scored against the new brand, so its history starts full rather than empty.",
+        inputSchema: z.object({
+          name: z.string().min(1).max(200),
+          aliases: z.array(z.string().min(1).max(200)).max(50).default([]),
+          domains: z.array(z.string().min(1).max(253)).max(50).default([]),
+          isOwn: z.boolean().default(false),
+        }),
+      },
+      async (input) => {
+        const parsed = createBrandSchema.safeParse(input);
+        if (!parsed.success) {
+          return text(
+            parsed.error.issues
+              .map(
+                (issue) =>
+                  `${issue.path.join(".") || "input"}: ${issue.message}`,
+              )
+              .join("; "),
+          );
+        }
+
+        try {
+          const [created] = await getDb()
+            .insert(brands)
+            .values(parsed.data)
+            .returning();
+          const queued = await markAllForReextraction();
+          return text({ brand: created, queuedForExtraction: queued });
+        } catch (error) {
+          if (isUniqueViolation(error)) {
+            return text(`A brand named "${parsed.data.name}" already exists`);
+          }
+          throw error;
+        }
+      },
+    );
+
+    server.registerTool(
+      "untrack_brand",
+      {
+        title: "Stop tracking a brand",
+        description:
+          "Delete a brand and every mention row derived for it. The raw answers are untouched.",
+        inputSchema: z.object({ brandId: z.uuid() }),
+      },
+      async ({ brandId }) => {
+        const deleted = await getDb()
+          .delete(brands)
+          .where(eq(brands.id, brandId))
+          .returning({ id: brands.id });
+        if (deleted.length === 0) return text(`Brand ${brandId} not found`);
+        return text({ deleted: true });
+      },
+    );
+
+    server.registerTool(
+      "get_brand_visibility",
+      {
+        title: "Get brand visibility",
+        description:
+          "How often each tracked brand was named in answers, and how often its own pages were cited, over the last N days. Counts every completed run as a denominator, so a brand that was never named reports 0 rather than going missing.",
+        inputSchema: z.object({
+          days: z.number().int().min(1).max(365).default(30),
+          engine: z.enum(ENGINES).optional(),
+        }),
+      },
+      async ({ days, engine }) => {
+        const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        const rows = await getDb()
+          .select({
+            brand: brands.name,
+            isOwn: brands.isOwn,
+            answers: sql<number>`count(*)::int`,
+            mentioned: sql<number>`count(*) filter (where ${resultBrandMentions.mentioned})::int`,
+            cited: sql<number>`count(*) filter (where ${resultBrandMentions.cited})::int`,
+          })
+          .from(resultBrandMentions)
+          .innerJoin(brands, eq(brands.id, resultBrandMentions.brandId))
+          .innerJoin(results, eq(results.id, resultBrandMentions.resultId))
+          .where(
+            and(
+              gte(results.completedAt, since),
+              engine ? eq(results.engine, engine) : undefined,
+            ),
+          )
+          .groupBy(brands.id, brands.name, brands.isOwn)
+          .orderBy(
+            desc(sql`count(*) filter (where ${resultBrandMentions.mentioned})`),
+          );
         return text(rows);
       },
     );
