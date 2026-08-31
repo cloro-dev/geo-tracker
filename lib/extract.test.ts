@@ -239,6 +239,24 @@ describe("extractMentions", () => {
     expect(mention.cited).toBe(true);
   });
 
+  it("does not count a name and its own alias twice in one phrase", () => {
+    const [mention] = extractMentions(
+      "Acme Corp is the vendor.",
+      [],
+      [brand({ name: "Acme", aliases: ["Acme Corp"] })],
+    );
+    expect(mention.mentionCount).toBe(1);
+  });
+
+  it("still counts the bare name where it stands alone", () => {
+    const [mention] = extractMentions(
+      "Acme Corp shipped it. Acme is well known.",
+      [],
+      [brand({ name: "Acme", aliases: ["Acme Corp"] })],
+    );
+    expect(mention.mentionCount).toBe(2);
+  });
+
   it("ignores an empty alias rather than matching everything", () => {
     const [mention] = extractMentions(
       "anything at all",
@@ -294,28 +312,61 @@ describe("extractSearchQueries", () => {
 });
 
 describe("extractCandidates", () => {
-  it("ships no candidates, so it finds nothing until configured", () => {
-    expect(BRAND_CANDIDATES).toEqual([]);
-    expect(extractCandidates("Anything at all")).toEqual([]);
+  const cand = (name: string, aliases: string[] = []) => ({ name, aliases });
+
+  it("ships a worked example list, not an empty one", () => {
+    expect(BRAND_CANDIDATES.length).toBeGreaterThan(0);
+    // A blank or untrimmed entry would be silently dropped and the panel
+    // would quietly under-report.
+    for (const candidate of BRAND_CANDIDATES) {
+      expect(candidate.name.trim()).toBe(candidate.name);
+      expect(candidate.name.length).toBeGreaterThan(0);
+      for (const alias of candidate.aliases) {
+        expect(alias.trim()).toBe(alias);
+        expect(alias.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("accepts a bare string as shorthand for a candidate with no aliases", () => {
+    const shorthand = BRAND_CANDIDATES.find((c) => c.aliases.length === 0);
+    expect(shorthand).toBeDefined();
   });
 
   it("returns only the hits, never a row of zeroes", () => {
     const found = extractCandidates("Globex leads, Globex again", [
-      "Globex",
-      "Initech",
+      cand("Globex"),
+      cand("Initech"),
     ]);
     expect(found).toEqual([{ name: "Globex", mentionCount: 2 }]);
   });
 
+  it("folds an alias into the canonical name rather than splitting it", () => {
+    // Two mentions, not three: the bare "Acme", then "Acme, Inc" claiming
+    // the phrase the shorter term would otherwise have double-counted.
+    const found = extractCandidates(
+      "Acme is good. Acme, Inc is the same firm.",
+      [cand("Acme", ["Acme, Inc"])],
+    );
+    expect(found).toEqual([{ name: "Acme", mentionCount: 2 }]);
+  });
+
+  it("finds a candidate named only by an alias", () => {
+    const found = extractCandidates("We evaluated Vandelay Industries.", [
+      cand("Vandelay", ["Vandelay Industries"]),
+    ]);
+    expect(found).toEqual([{ name: "Vandelay", mentionCount: 1 }]);
+  });
+
   it("uses the same word-boundary rule as a tracked brand", () => {
-    expect(extractCandidates("globexcorp ships", ["Globex"])).toEqual([]);
-    expect(extractCandidates("we use globex.com", ["Globex"])).toEqual([
+    expect(extractCandidates("globexcorp ships", [cand("Globex")])).toEqual([]);
+    expect(extractCandidates("we use globex.com", [cand("Globex")])).toEqual([
       { name: "Globex", mentionCount: 1 },
     ]);
   });
 
   it("finds nothing in an answer with no prose", () => {
-    expect(extractCandidates("", ["Globex"])).toEqual([]);
+    expect(extractCandidates("", [cand("Globex")])).toEqual([]);
   });
 });
 

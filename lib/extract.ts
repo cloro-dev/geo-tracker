@@ -10,20 +10,53 @@ import type { Brand } from "./db/schema";
  * which brands matter is the user's, declared in the `brands` table.
  */
 
-/** Bump when the rules below change, so finished results are re-derived. */
-export const EXTRACTION_REVISION = 2;
+/**
+ * Bump when the rules below change, so finished results are re-derived.
+ *
+ * 3: matching became non-overlapping. A brand or candidate whose alias
+ *    contains its own name ("Vandelay" inside "Vandelay Industries") was
+ *    counting one phrase twice, so every stored mention_count derived
+ *    before this is potentially inflated and has to be rebuilt.
+ * 2: search queries and brand candidates began to be extracted.
+ */
+export const EXTRACTION_REVISION = 3;
 
 /**
- * Names to watch for without tracking them. See `brand-candidates.json`.
+ * A name to watch for without tracking it, plus the other spellings that
+ * count as the same one. See `brand-candidates.json`.
  */
-// Typed through `unknown[]` rather than trusting the import: an empty
-// array in the shipped JSON infers as `never[]`, and a user editing the
-// file by hand is exactly the case that puts a non-string in it.
-export const BRAND_CANDIDATES: string[] = (
+export interface BrandCandidate {
+  name: string;
+  aliases: string[];
+}
+
+/**
+ * The candidate list, normalised.
+ *
+ * Read through `unknown` rather than trusting the import: this file is
+ * meant to be hand-edited, so a stray number, a missing `aliases` or a
+ * bare string in place of an object are all expected inputs, not
+ * corruption. A plain string is shorthand for a candidate with no aliases.
+ */
+export const BRAND_CANDIDATES: BrandCandidate[] = (
   (candidatesFile as { candidates?: unknown[] }).candidates ?? []
-).filter(
-  (name): name is string => typeof name === "string" && name.trim().length > 0,
-);
+)
+  .map((entry): BrandCandidate | null => {
+    if (typeof entry === "string") {
+      const name = entry.trim();
+      return name.length > 0 ? { name, aliases: [] } : null;
+    }
+    if (typeof entry !== "object" || entry === null) return null;
+    const record = entry as { name?: unknown; aliases?: unknown };
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    if (name.length === 0) return null;
+    const aliases = (Array.isArray(record.aliases) ? record.aliases : [])
+      .filter((alias): alias is string => typeof alias === "string")
+      .map((alias) => alias.trim())
+      .filter((alias) => alias.length > 0);
+    return { name, aliases };
+  })
+  .filter((candidate): candidate is BrandCandidate => candidate !== null);
 
 /** FNV-1a, folded to 31 bits so it fits the integer column. */
 function fingerprint(text: string): number {
@@ -47,7 +80,12 @@ function fingerprint(text: string): number {
  * file is not a change.
  */
 export const EXTRACTION_STAMP = fingerprint(
-  `${EXTRACTION_REVISION}:${[...BRAND_CANDIDATES].sort().join("\u0000")}`,
+  `${EXTRACTION_REVISION}:${BRAND_CANDIDATES.map(
+    (candidate) =>
+      `${candidate.name}|${[...candidate.aliases].sort().join(",")}`,
+  )
+    .sort()
+    .join("\u0000")}`,
 );
 
 export interface ExtractedSource {
@@ -257,21 +295,49 @@ function escapeRegExp(value: string): string {
  * while a dot stays a boundary — which is what lets a brand tracked as
  * "acme" match the "acme.io" an engine wrote.
  */
-function countMatches(haystack: string, needle: string): [number, number] {
+function matchSpans(haystack: string, needle: string): [number, number][] {
   const trimmed = needle.trim();
-  if (trimmed.length === 0) return [0, -1];
+  if (trimmed.length === 0) return [];
 
   const pattern = new RegExp(
     `(?<![\\p{L}\\p{N}_-])${escapeRegExp(trimmed)}(?![\\p{L}\\p{N}_-])`,
     "giu",
   );
-  let count = 0;
-  let first = -1;
+  const spans: [number, number][] = [];
   for (const match of haystack.matchAll(pattern)) {
-    count += 1;
-    if (first === -1) first = match.index ?? -1;
+    const start = match.index ?? -1;
+    if (start >= 0) spans.push([start, start + match[0].length]);
   }
-  return [count, first];
+  return spans;
+}
+
+/**
+ * Count how often ANY of `terms` appears, without counting the same words
+ * twice, and report where the first one starts.
+ *
+ * A name and its own alias overlap constantly — "Vandelay Industries"
+ * contains "Vandelay", and both are terms for the same company. Counting
+ * each term separately reported that sentence as two mentions. Longer
+ * terms win, so the most specific spelling claims the text and the shorter
+ * one only counts where it stands alone.
+ */
+function countTerms(haystack: string, terms: string[]): [number, number] {
+  const candidates = terms
+    .map((term) => ({ term, spans: matchSpans(haystack, term) }))
+    .sort((a, b) => b.term.trim().length - a.term.trim().length);
+
+  const taken: [number, number][] = [];
+  for (const { spans } of candidates) {
+    for (const span of spans) {
+      const overlaps = taken.some(
+        ([start, end]) => span[0] < end && start < span[1],
+      );
+      if (!overlaps) taken.push(span);
+    }
+  }
+
+  if (taken.length === 0) return [0, -1];
+  return [taken.length, Math.min(...taken.map(([start]) => start))];
 }
 
 /**
@@ -288,16 +354,11 @@ export function extractMentions(
   const domains = sources.map((source) => source.domain);
 
   return brandList.map((brand) => {
-    let mentionCount = 0;
-    let firstPosition = -1;
-
-    for (const term of [brand.name, ...brand.aliases]) {
-      const [count, index] = countMatches(text, term);
-      mentionCount += count;
-      if (index !== -1 && (firstPosition === -1 || index < firstPosition)) {
-        firstPosition = index;
-      }
-    }
+    const [mentionCount, firstIndex] = countTerms(text, [
+      brand.name,
+      ...brand.aliases,
+    ]);
+    const firstPosition = firstIndex === -1 ? null : firstIndex;
 
     // A brand's own domain counts, and so does a subdomain of it: an
     // answer citing "blog.acme.io" cited Acme. Suffix-matched on a dot so
@@ -313,7 +374,7 @@ export function extractMentions(
       brandId: brand.id,
       mentioned: mentionCount > 0,
       mentionCount,
-      firstPosition: firstPosition === -1 ? null : firstPosition,
+      firstPosition,
       cited: citedSourceCount > 0,
       citedSourceCount,
     };
@@ -377,12 +438,18 @@ export function extractSearchQueries(response: unknown): ExtractedQuery[] {
  */
 export function extractCandidates(
   text: string,
-  names: string[] = BRAND_CANDIDATES,
+  candidates: BrandCandidate[] = BRAND_CANDIDATES,
 ): ExtractedCandidate[] {
   const found: ExtractedCandidate[] = [];
-  for (const name of names) {
-    const [count] = countMatches(text, name);
-    if (count > 0) found.push({ name, mentionCount: count });
+  for (const candidate of candidates) {
+    // Aliases fold into the canonical name: "Acme" and "Acme, Inc" are one
+    // company, and reporting them as two rows would split the evidence you
+    // are meant to weigh.
+    const [mentionCount] = countTerms(text, [
+      candidate.name,
+      ...candidate.aliases,
+    ]);
+    if (mentionCount > 0) found.push({ name: candidate.name, mentionCount });
   }
   return found;
 }

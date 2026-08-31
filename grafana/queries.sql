@@ -57,46 +57,28 @@ DELETE FROM results WHERE created_at < now() - interval '90 days';
 -- ============================================================
 -- Brand visibility (geo-visibility.json)
 --
--- These read the tables the scheduler tick derives from results.response:
--- result_sources, result_brand_mentions, result_search_queries and
--- result_candidate_mentions. The Grafana macros are replaced here with
--- plain predicates so each block runs as-is in psql.
+-- Panel order and geometry match the internal GEO dashboard in
+-- cloro-dev/infra. These read the tables the scheduler tick derives from
+-- results.response: result_sources, result_brand_mentions,
+-- result_search_queries and result_candidate_mentions. The Grafana macros
+-- are replaced here with plain predicates so each block runs in psql.
 -- ============================================================
 
--- Named in answers
-SELECT round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS value
-  FROM result_brand_mentions m
-  JOIN brands b ON b.id = m.brand_id
-  JOIN results r ON r.id = m.result_id
+-- Named but not tracked — candidates worth adding
+SELECT c.name AS "Name",
+    sum(c.mention_count) AS "Mentions",
+    count(DISTINCT r.engine) AS "Engines",
+    count(DISTINCT r.prompt_id) AS "Prompts",
+    max(r.completed_at)::date::text AS "Last seen"
+  FROM result_candidate_mentions c
+  JOIN results r ON r.id = c.result_id
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1);
-
--- Cited in answers
-SELECT round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS value
-  FROM result_brand_mentions m
-  JOIN brands b ON b.id = m.brand_id
-  JOIN results r ON r.id = m.result_id
-  WHERE r.status = 'completed'
-    AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1);
-
--- Share of voice
-SELECT round(100.0 * count(*) FILTER (WHERE m.mentioned AND b.is_own)
-    / greatest(count(*) FILTER (WHERE m.mentioned), 1), 1) AS value
-  FROM result_brand_mentions m
-  JOIN brands b ON b.id = m.brand_id
-  JOIN results r ON r.id = m.result_id
-  WHERE r.status = 'completed'
-    AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google');
-
--- Answers analysed
-SELECT count(DISTINCT r.id) AS value
-  FROM results r
-  WHERE r.status = 'completed'
-    AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google');
+    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
+    AND lower(c.name) NOT IN (SELECT lower(name) FROM brands)
+  GROUP BY c.name
+  ORDER BY sum(c.mention_count) DESC
+  LIMIT 30;
 
 -- Brand ranking — named and cited
 SELECT b.name || CASE WHEN b.is_own THEN ' (us)' ELSE '' END AS "Brand",
@@ -125,34 +107,18 @@ SELECT date_trunc('day', r.completed_at) AS "time",
   GROUP BY 1, b.name
   ORDER BY 1;
 
--- Our visibility by engine
-SELECT r.engine AS "Engine",
-    round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS "Named %",
-    round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS "Cited %"
+-- Brand visibility by engine
+SELECT date_trunc('day', r.completed_at) AS "time",
+    r.engine AS metric,
+    round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS value
   FROM result_brand_mentions m
   JOIN brands b ON b.id = m.brand_id
   JOIN results r ON r.id = m.result_id
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
     AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
-  GROUP BY r.engine
-  ORDER BY "Named %" DESC;
-
--- Every prompt — how we do on each
-SELECT p.name AS "Prompt",
-    count(*) AS "Answers",
-    round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS "Named %",
-    round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS "Cited %",
-    round(avg(m.first_position) FILTER (WHERE m.mentioned)) AS "Avg position"
-  FROM result_brand_mentions m
-  JOIN brands b ON b.id = m.brand_id
-  JOIN results r ON r.id = m.result_id
-  JOIN prompts p ON p.id = r.prompt_id
-  WHERE r.status = 'completed'
-    AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
-  GROUP BY p.id, p.name
-  ORDER BY "Named %" ASC;
+  GROUP BY 1, r.engine
+  ORDER BY 1;
 
 -- Pages to get listed on
 SELECT s.domain AS "Domain",
@@ -168,6 +134,7 @@ SELECT s.domain AS "Domain",
     AND r.completed_at > now() - interval '30 days'
     AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
     AND s.domain NOT IN (SELECT unnest(domains) FROM brands)
+    AND s.url ILIKE '%' || '' || '%'
   GROUP BY s.domain
   ORDER BY "Answers citing it" DESC
   LIMIT 30;
@@ -191,63 +158,59 @@ SELECT s.domain AS "Domain",
   GROUP BY s.domain, s.kind
   ORDER BY "Answers citing it" DESC;
 
--- Top search queries the engines issued
-SELECT q.query AS "Query",
-    count(*) AS "Times",
-    count(DISTINCT r.engine) AS "Engines",
-    count(DISTINCT r.prompt_id) AS "Prompts"
-  FROM result_search_queries q
-  JOIN results r ON r.id = q.result_id
-  WHERE r.status = 'completed'
-    AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google') AND q.kind = 'issued'
-  GROUP BY q.query
-  ORDER BY count(*) DESC, q.query
-  LIMIT 40;
-
--- Named but not tracked — candidates worth adding
-SELECT c.name AS "Name",
-    sum(c.mention_count) AS "Mentions",
-    count(DISTINCT r.engine) AS "Engines",
-    count(DISTINCT r.prompt_id) AS "Prompts",
-    max(r.completed_at)::date::text AS "Last seen"
-  FROM result_candidate_mentions c
-  JOIN results r ON r.id = c.result_id
-  WHERE r.status = 'completed'
-    AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
-    AND lower(c.name) NOT IN (SELECT lower(name) FROM brands)
-  GROUP BY c.name
-  ORDER BY sum(c.mention_count) DESC
-  LIMIT 30;
-
 -- Top YouTube videos — retrieved for your prompts
-SELECT coalesce(s.label, s.url) AS "Video",
-    count(DISTINCT s.result_id) AS "Answers"
+SELECT coalesce(s.label, regexp_replace(s.url, '^https?://', '')) AS "Video",
+    count(DISTINCT s.result_id) AS "Retrievals",
+    count(DISTINCT r.engine) AS "Engines",
+    count(DISTINCT s.result_id) FILTER (WHERE own.mentioned) AS "Named with us",
+    regexp_replace(s.url, '^https?://', '') AS "URL"
   FROM result_sources s
   JOIN results r ON r.id = s.result_id
+  LEFT JOIN result_brand_mentions own
+    ON own.result_id = s.result_id AND own.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
     AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
     AND (s.domain = 'youtube.com' OR s.domain = 'youtu.be'
          OR s.domain LIKE '%.youtube.com')
   GROUP BY s.url, s.label
-  ORDER BY count(DISTINCT s.result_id) DESC
-  LIMIT 20;
+  ORDER BY 2 DESC, 3 DESC
+  LIMIT 25;
 
 -- Top Reddit posts — retrieved for your prompts
-SELECT coalesce(s.label, s.url) AS "Post",
-    count(DISTINCT s.result_id) AS "Answers"
+SELECT coalesce(s.label, regexp_replace(s.url, '^https?://', '')) AS "Post",
+    count(DISTINCT s.result_id) AS "Retrievals",
+    count(DISTINCT r.engine) AS "Engines",
+    count(DISTINCT s.result_id) FILTER (WHERE own.mentioned) AS "Named with us",
+    regexp_replace(s.url, '^https?://', '') AS "URL"
   FROM result_sources s
   JOIN results r ON r.id = s.result_id
+  LEFT JOIN result_brand_mentions own
+    ON own.result_id = s.result_id AND own.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
     AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
     AND (s.domain = 'reddit.com' OR s.domain = 'redd.it'
          OR s.domain LIKE '%.reddit.com')
   GROUP BY s.url, s.label
-  ORDER BY count(DISTINCT s.result_id) DESC
-  LIMIT 20;
+  ORDER BY 2 DESC, 3 DESC
+  LIMIT 25;
+
+-- Every prompt — how we do on each
+SELECT p.name AS "Prompt",
+    count(*) AS "Answers",
+    round(100.0 * count(*) FILTER (WHERE m.mentioned) / greatest(count(*), 1), 1) AS "Named %",
+    round(100.0 * count(*) FILTER (WHERE m.cited) / greatest(count(*), 1), 1) AS "Cited %",
+    round(avg(m.first_position) FILTER (WHERE m.mentioned)) AS "Avg position"
+  FROM result_brand_mentions m
+  JOIN brands b ON b.id = m.brand_id
+  JOIN results r ON r.id = m.result_id
+  JOIN prompts p ON p.id = r.prompt_id
+  WHERE r.status = 'completed'
+    AND r.completed_at > now() - interval '30 days'
+    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
+  GROUP BY p.id, p.name
+  ORDER BY "Named %" ASC;
 
 -- Prompt redundancy — prompts that retrieve the same pages
 WITH per_prompt AS (
@@ -285,3 +248,17 @@ SELECT date_trunc('day', r.completed_at) AS "time",
     AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google')
   GROUP BY 1, r.engine
   ORDER BY 1;
+
+-- Top search queries the engines issued
+SELECT q.query AS "Query",
+    count(*) AS "Times",
+    count(DISTINCT r.engine) AS "Engines",
+    count(DISTINCT r.prompt_id) AS "Prompts"
+  FROM result_search_queries q
+  JOIN results r ON r.id = q.result_id
+  WHERE r.status = 'completed'
+    AND r.completed_at > now() - interval '30 days'
+    AND r.engine IN ('chatgpt','perplexity','gemini','aimode','google') AND q.kind = 'issued'
+  GROUP BY q.query
+  ORDER BY count(*) DESC, q.query
+  LIMIT 40;

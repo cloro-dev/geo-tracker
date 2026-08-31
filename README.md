@@ -295,10 +295,16 @@ engines typed before retrieving anything. ChatGPT, Copilot, Grok and
 Perplexity report these; the others do not.
 
 To watch a competitor without tracking it, add its name to
-`lib/brand-candidates.json`. Names there that turn up in answers, and that
-you are not tracking, surface as a shortlist worth adding. The file ships
-empty — geo-tracker does not guess who competes with you, and it cannot
-find a brand nobody wrote down.
+`lib/brand-candidates.json`, with any alternative spellings:
+
+```json
+{ "name": "Acme", "aliases": ["Acme, Inc", "Acme Corp"] }
+```
+
+Names there that turn up in answers, and that you are not tracking,
+surface as a shortlist worth adding. The file ships with fictional
+placeholders to replace — geo-tracker does not guess who competes with
+you, and it cannot find a brand nobody wrote down.
 
 Nothing here scores or ranks an answer. It records whether a name is
 present. What that means is the agent's call.

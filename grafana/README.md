@@ -45,6 +45,12 @@ and pick the datasource you just created when prompted.
 which brands the engines name, which pages they cite, and where you are
 losing. Import it the same way as the first one.
 
+Its panel order and geometry match the internal GEO dashboard cloro runs
+on its own data, so the two read the same way. Three panels of that one
+have no counterpart here: two are keyed on a prompt-set concept this repo
+does not have, and the third needs a list of pages you are already listed
+on, which there is nowhere to keep yet.
+
 It needs at least one brand configured with `is_own = true` — several
 panels are written against "your" brand, and are empty without one:
 
@@ -66,10 +72,18 @@ them. Anything listed there that an answer names, and that is not in your
 `brands` table, appears in the "Named but not tracked" panel — the
 shortlist worth promoting.
 
-It ships empty, so that panel is blank until you fill it in. Put the
-vendors in your category there, in the spellings an engine would write.
-Editing the file re-derives the whole history on the next tick, so a name
-added today is scored against answers already stored.
+Each entry carries the spellings an engine might write, and they fold into
+one row:
+
+```json
+{ "name": "Acme", "aliases": ["Acme, Inc", "Acme Corp"] }
+```
+
+A bare string works when a name needs no aliases. What ships is a list of
+**fictional placeholder companies** — replace every one of them with the
+real vendors in your category. Editing the file re-derives the whole
+history on the next tick, so a name added today is scored against answers
+already stored.
 
 It cannot discover a brand nobody wrote down. That is deliberate: finding
 unknown names in prose means entity extraction, and geo-tracker does not

@@ -99,12 +99,12 @@ const MENTION_RATE = {
 /**
  * Vendors the answers name but that nobody tracks.
  *
- * These exist so the "Named but not tracked" panel has something to find.
- * To see that panel locally, copy these names into
- * `lib/brand-candidates.json` — the file ships empty, so the panel is
- * correctly blank until somebody says which names are worth watching.
+ * Drawn from the list shipped in `lib/brand-candidates.json`, so the
+ * "Named but not tracked" panel has something to find straight after a
+ * seed with no extra setup. None of these is in the brands table, which is
+ * the whole point of that panel.
  */
-const UNTRACKED_VENDORS = ["Initrode", "Hooli", "Vandelay", "Soylent"];
+const UNTRACKED_VENDORS = ["Initrode", "Hooli", "Vandelay", "Cyberdyne"];
 
 const BRAND_SITE = {
   Acme: ["acme.io", "/product"],
