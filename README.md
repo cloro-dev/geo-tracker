@@ -34,7 +34,8 @@ That one sentence is a `create_prompt` call, a `run_prompt` call and a
   add prompts, run them and query the answers without a human in the loop.
 - **Your data, queryable** — plain Postgres, so an agent can also read it
   with SQL, and the [Grafana starter](./grafana/README.md) charts it.
-- **$0 to run** — fits in Vercel's free tier, database included.
+- **$0 to run** — fits in Vercel's free tier, database included, until the
+  derived tables outgrow it (see [Data & retention](#data--retention)).
 - **Fully async** — scrapes are submitted as
   [cloro async tasks](https://cloro.dev/docs) and results come back by
   webhook, so no serverless function ever waits on a scrape.
@@ -288,7 +289,24 @@ you without linking you, or link you without naming you.
 Adding or editing a brand re-scores every answer already stored, so a
 brand you add today has full history rather than starting at zero. The
 work happens in the scheduler tick, a batch at a time; the API response
-tells you how many results were queued.
+tells you how many results are queued.
+
+**A deployment with history takes a while to catch up.** The tick derives
+250 results, and Vercel's Hobby plan runs one cron a day — so re-deriving
+a year of answers would take months of ticks. Two ways round it, and the
+tick is idempotent so either is safe:
+
+- Point an external scheduler (GitHub Actions, cron-job.org) at
+  `/api/cron` every few minutes until `more` comes back `false`.
+- Or call it by hand in a loop:
+
+  ```bash
+  while curl -s -H "Authorization: Bearer $CRON_SECRET" \
+    https://<your-app>.vercel.app/api/cron | grep -q '"more":true'; do :; done
+  ```
+
+Nothing is missing while it runs. The old rows stay until each result is
+rebuilt, so the dashboard shows values that are stale, never blank.
 
 `result_search_queries` holds a third thing: the literal queries the
 engines typed before retrieving anything. ChatGPT, Copilot, Grok and
@@ -346,17 +364,29 @@ so just hit `/api/cron` again after a scrape completes.
 
 ## Data & retention
 
-Two tables: `prompts` and `results`. Each run stores one row per engine
-with the full raw cloro response as `jsonb` — measured at **10–30 KB per
-row**, so budget roughly 20 KB per engine per run.
+Two tables hold what you asked and what came back: `prompts` and
+`results`. Each run stores one row per engine with the full raw cloro
+response as `jsonb` — measured at **10–30 KB per row**, so budget roughly
+20 KB per engine per run.
 
-Storage is the limit you hit first, well before anything on Vercel:
+Four more are derived from those responses by the scheduler tick
+(`result_sources`, `result_brand_mentions`, `result_search_queries`,
+`result_candidate_mentions`). They add about **5 KB per answer**, so
+budget ~25 KB per engine per run in total. That figure scales with how
+many links an answer carries, not with how big its payload is, so a chatty
+engine costs more here than a terse one with a large HTML blob.
+
+Storage is the limit you hit first, well before anything on Vercel. The
+figures below include the derived rows:
 
 | Workload                       | Scrapes/day | Storage/month | 0.5 GB lasts |
 | ------------------------------ | ----------- | ------------- | ------------ |
-| 10 prompts × 3 engines × 1/day | 30          | ~18 MB        | over 2 years |
-| 20 prompts × 4 engines × 4/day | 320         | ~190 MB       | ~3 months    |
-| 50 prompts × 6 engines × 8/day | 2,400       | ~1.4 GB       | ~2 weeks     |
+| 10 prompts × 3 engines × 1/day | 30          | ~23 MB        | ~1.8 years   |
+| 20 prompts × 4 engines × 4/day | 320         | ~240 MB       | ~2 months    |
+| 50 prompts × 6 engines × 8/day | 2,400       | ~1.8 GB       | ~8 days      |
+
+Deleting a result cascades to its derived rows, so a retention policy
+needs no extra step.
 
 The same workloads use under 1%, 1% and 7% of Vercel's free monthly
 function invocations, so the compute side stays free throughout.

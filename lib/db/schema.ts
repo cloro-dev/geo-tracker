@@ -59,12 +59,19 @@ export const results = pgTable(
     index("results_pending_idx")
       .on(table.createdAt)
       .where(sql`${table.status} = 'pending'`),
-    // The refresh queue. Partial so it stays small: a fully extracted
-    // deployment has an empty index, and the scan the cron does every tick
-    // costs nothing once it has caught up.
+    // The refresh queue, and it really is a queue: the predicate matches
+    // only rows still waiting, so a caught-up deployment has an EMPTY
+    // index and the tick's queue scan costs nothing.
+    //
+    // This works only because "needs extraction" is `IS NULL` rather than
+    // "stamp differs from the current one". A `<>` against a value the
+    // index cannot know is not sargable, and Postgres answered it with a
+    // sequential scan of every completed row, every tick, forever.
     index("results_unextracted_idx")
       .on(table.completedAt)
-      .where(sql`${table.status} = 'completed'`),
+      .where(
+        sql`${table.status} = 'completed' AND ${table.extractionRevision} IS NULL`,
+      ),
   ],
 );
 
@@ -172,6 +179,25 @@ export const resultBrandMentions = pgTable(
     index("result_brand_mentions_brand_idx").on(table.brandId),
   ],
 );
+
+/**
+ * One row, holding the extraction stamp the stored rows were built at.
+ *
+ * The tick compares this to the current stamp and, when they differ,
+ * clears `results.extraction_revision` in one statement. That is what lets
+ * the queue be an `IS NULL` test — a sargable one — instead of a
+ * comparison against a constant no index can hold.
+ */
+export const extractionState = pgTable("extraction_state", {
+  // A single row, pinned: `true` is the only value the check allows.
+  id: boolean("id").primaryKey().default(true),
+  stamp: integer("stamp").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type ExtractionState = typeof extractionState.$inferSelect;
 
 export type Brand = typeof brands.$inferSelect;
 export type NewBrand = typeof brands.$inferInsert;

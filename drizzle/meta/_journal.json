@@ -22,6 +22,13 @@
       "when": 1788089565249,
       "tag": "0002_freezing_sumo",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788213732745,
+      "tag": "0003_vengeful_havok",
+      "breakpoints": true
     }
   ]
 }

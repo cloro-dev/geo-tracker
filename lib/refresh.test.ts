@@ -10,6 +10,7 @@ import {
 import { getDb } from "./db";
 import {
   brands,
+  extractionState,
   prompts,
   resultBrandMentions,
   results,
@@ -165,6 +166,27 @@ describeDb("refreshDerived", () => {
 
     expect(await getDb().select().from(resultSources)).toHaveLength(1);
     expect(await getDb().select().from(resultBrandMentions)).toHaveLength(1);
+  });
+
+  it("reopens the history once when the extraction rules change", async () => {
+    const promptId = await seedPrompt();
+    await seedResult(promptId, answer("Acme"));
+    await seedBrand("Acme");
+    await refreshDerived();
+
+    // The stamp now matches, so nothing is reopened on later ticks.
+    expect(await refreshDerived()).toMatchObject({ reopened: 0 });
+
+    // Simulate a deploy that changed the rules: the stored stamp no longer
+    // agrees with the code's.
+    await getDb().update(extractionState).set({ stamp: -1 });
+
+    const summary = await refreshDerived();
+    expect(summary.reopened).toBe(1);
+    expect(summary.extracted).toBe(1);
+
+    // And it settles: the next tick reopens nothing.
+    expect(await refreshDerived()).toMatchObject({ reopened: 0, extracted: 0 });
   });
 
   it("re-opens history so a newly added brand is scored on old answers", async () => {

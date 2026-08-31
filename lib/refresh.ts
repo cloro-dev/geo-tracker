@@ -1,8 +1,9 @@
-import { and, asc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { getDb } from "./db";
 import {
   brands,
+  extractionState,
   resultBrandMentions,
   resultCandidateMentions,
   results,
@@ -39,6 +40,12 @@ const TIME_BUDGET_MS = 20_000;
 export interface RefreshSummary {
   /** Results whose derived rows were rebuilt this tick. */
   extracted: number;
+  /**
+   * Results reopened this tick because the extraction rules changed.
+   * Non-zero on the first tick after a deploy that changes them, and zero
+   * on every tick after.
+   */
+  reopened: number;
   /** Links written across those results. */
   sources: number;
   /** True when the budget or the batch cap stopped us short of the queue. */
@@ -73,12 +80,59 @@ export function affectsExtraction(changed: Record<string, unknown>): boolean {
  */
 export async function markAllForReextraction(): Promise<number> {
   const db = getDb();
-  const updated = await db
+  // Only the rows that still carry a stamp need writing: setting NULL over
+  // NULL is a no-op that still writes a dead tuple, and this statement runs
+  // against the whole table.
+  await db
     .update(results)
     .set({ extractionRevision: null })
-    .where(eq(results.status, "completed"))
-    .returning({ id: results.id });
-  return updated.length;
+    .where(
+      and(
+        eq(results.status, "completed"),
+        isNotNull(results.extractionRevision),
+      ),
+    );
+
+  // Report the depth of the queue, not the number of rows written. Callers
+  // ask "how many answers will be re-derived", and a result that was
+  // already waiting counts toward that just as much as one just reopened.
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(results)
+    .where(
+      and(eq(results.status, "completed"), isNull(results.extractionRevision)),
+    );
+  return row.count;
+}
+
+/**
+ * Clear the queue flag on every completed result when the extraction rules
+ * changed since the stored rows were built.
+ *
+ * This is what keeps the queue predicate sargable. The alternative — asking
+ * for rows whose stamp differs from the current one — cannot use an index,
+ * because no index can hold a constant the query supplies at runtime, and
+ * Postgres answered it by scanning every completed row on every tick even
+ * when nothing was waiting.
+ *
+ * Returns how many rows were reopened, which is zero on the overwhelming
+ * majority of ticks.
+ */
+async function syncExtractionStamp(
+  db: ReturnType<typeof getDb>,
+): Promise<number> {
+  const [state] = await db.select().from(extractionState);
+  if (state?.stamp === EXTRACTION_STAMP) return 0;
+
+  const reopened = await markAllForReextraction();
+  await db
+    .insert(extractionState)
+    .values({ id: true, stamp: EXTRACTION_STAMP, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: extractionState.id,
+      set: { stamp: EXTRACTION_STAMP, updatedAt: new Date() },
+    });
+  return reopened;
 }
 
 /**
@@ -190,20 +244,22 @@ export async function refreshDerived(
   // reading and mark the results done, so adding the first brand later
   // would need a full re-extraction to notice them.
   if (brandList.length === 0) {
-    return { extracted: 0, sources: 0, more: false, skipped: true };
+    return {
+      extracted: 0,
+      reopened: 0,
+      sources: 0,
+      more: false,
+      skipped: true,
+    };
   }
+
+  const reopened = await syncExtractionStamp(db);
 
   const pending = await db
     .select({ id: results.id, response: results.response })
     .from(results)
     .where(
-      and(
-        eq(results.status, "completed"),
-        or(
-          isNull(results.extractionRevision),
-          ne(results.extractionRevision, EXTRACTION_STAMP),
-        ),
-      ),
+      and(eq(results.status, "completed"), isNull(results.extractionRevision)),
     )
     .orderBy(asc(results.completedAt))
     .limit(BATCH_SIZE);
@@ -216,7 +272,7 @@ export async function refreshDerived(
     // with a slow tick never derives a single row — the queue would look
     // busy forever while staying exactly the same size.
     if (extracted > 0 && now() - startedAt > TIME_BUDGET_MS) {
-      return { extracted, sources, more: true, skipped: false };
+      return { extracted, reopened, sources, more: true, skipped: false };
     }
     sources += await extractOne(db, row, brandList);
     extracted += 1;
@@ -224,6 +280,7 @@ export async function refreshDerived(
 
   return {
     extracted,
+    reopened,
     sources,
     more: pending.length === BATCH_SIZE,
     skipped: false,
