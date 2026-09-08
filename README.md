@@ -16,9 +16,10 @@ Free tier all the way through.
 ---
 
 Configure prompts once; geo-tracker runs them on a schedule against
-ChatGPT, Gemini, Copilot, Perplexity, Grok, Google AI Mode, Google Search
-and Google News — powered by the [cloro API](https://cloro.dev) — and
-stores every raw response in your own Postgres.
+ChatGPT, Gemini, Copilot, Perplexity, Grok (currently unavailable), Google
+AI Mode, Google Search and Google News — powered by the
+[cloro API](https://cloro.dev) — and stores every raw response in your own
+Postgres.
 
 **Built to be driven by an agent, not by a dashboard.** There is no UI to
 click. Every capability is an MCP tool and a REST endpoint, so your agent
@@ -179,6 +180,11 @@ All endpoints except the webhook require
 
 Engines: `chatgpt`, `gemini`, `copilot`, `perplexity`, `grok`, `aimode`,
 `google`, `google-news`.
+
+`grok` is temporarily unavailable upstream: the cloro API fails every Grok
+request, so a prompt that includes it records a failed result on every
+scheduled tick. Leave `grok` out of your prompts until the provider is
+restored.
 
 `GET /api/results` filters (query params): `promptId`, `engine`,
 `status` (`pending` | `completed` | `failed`), `from`, `to` (ISO dates),
