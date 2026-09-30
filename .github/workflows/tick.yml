@@ -19,6 +19,10 @@ on:
 
 jobs:
   tick:
+    # Skip when the variable is not set. A skipped job gets no runner, so an
+    # unconfigured copy of this repo uses no Actions minutes and shows no
+    # failed runs.
+    if: ${{ vars.TRACKER_URL != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Trigger due prompts
