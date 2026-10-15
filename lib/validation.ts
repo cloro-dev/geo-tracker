@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ENGINES } from "./engines";
+import { ENGINES, RESULT_ENGINES } from "./engines";
 
 export const createPromptSchema = z.object({
   name: z.string().min(1).max(200),
@@ -82,7 +82,7 @@ export const updateBrandSchema = z
 
 export const resultsQuerySchema = z.object({
   promptId: z.uuid().optional(),
-  engine: z.enum(ENGINES).optional(),
+  engine: z.enum(RESULT_ENGINES).optional(),
   status: z.enum(["pending", "completed", "failed"]).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),

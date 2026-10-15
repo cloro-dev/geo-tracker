@@ -46,6 +46,7 @@ describe("isEngine", () => {
   it("accepts known slugs and rejects everything else", () => {
     expect(isEngine("perplexity")).toBe(true);
     expect(isEngine("bing")).toBe(false);
+    expect(isEngine("grok")).toBe(false);
     expect(isEngine("")).toBe(false);
   });
 });

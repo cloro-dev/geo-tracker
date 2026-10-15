@@ -5,7 +5,7 @@ import { z } from "zod";
 import { isApiKeyAuthorized, unauthorized } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { brands, prompts, resultBrandMentions, results } from "@/lib/db/schema";
-import { ENGINES } from "@/lib/engines";
+import { ENGINES, RESULT_ENGINES } from "@/lib/engines";
 import { isUniqueViolation } from "@/lib/http";
 import { markAllForReextraction } from "@/lib/refresh";
 import { submitPromptOnce } from "@/lib/runner";
@@ -96,7 +96,7 @@ const handler = createMcpHandler(
           "Query stored run results (without the raw response payload — use get_result for that). Filter by prompt, engine or status.",
         inputSchema: z.object({
           promptId: z.uuid().optional(),
-          engine: z.enum(ENGINES).optional(),
+          engine: z.enum(RESULT_ENGINES).optional(),
           status: z.enum(["pending", "completed", "failed"]).optional(),
           limit: z.number().int().min(1).max(200).default(50),
         }),
@@ -211,7 +211,7 @@ const handler = createMcpHandler(
           "How often each tracked brand was named in answers, and how often its own pages were cited, over the last N days. Counts every completed run as a denominator, so a brand that was never named reports 0 rather than going missing.",
         inputSchema: z.object({
           days: z.number().int().min(1).max(365).default(30),
-          engine: z.enum(ENGINES).optional(),
+          engine: z.enum(RESULT_ENGINES).optional(),
         }),
       },
       async ({ days, engine }) => {

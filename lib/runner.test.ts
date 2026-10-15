@@ -94,6 +94,18 @@ describe.skipIf(!hasDatabase)("runner (needs a database)", () => {
       expect(new Set(submitted.map((r) => r.taskId)).size).toBe(2);
     });
 
+    // cloro discontinued Grok. A prompt saved before that can still list it.
+    it("skips an engine that cloro no longer serves", async () => {
+      const prompt = await insertPrompt({ engines: ["chatgpt", "grok"] });
+      const submitted = await submitPromptOnce(prompt);
+
+      expect(submitted.map((r) => r.engine)).toEqual(["chatgpt"]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(
+        await submitPromptOnce(await insertPrompt({ engines: ["grok"] })),
+      ).toEqual([]);
+    });
+
     // A failed submission must not look pending, or the row waits forever
     // for a webhook that will never arrive.
     it("stores a failed row when cloro rejects the submission", async () => {

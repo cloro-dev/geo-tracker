@@ -5,7 +5,7 @@ import { getDb } from "./db";
 import { prompts, results, type NewResult, type Prompt } from "./db/schema";
 import { refreshDerived, type RefreshSummary } from "./refresh";
 import { webhookCallbackUrl } from "./webhooks";
-import type { Engine } from "./engines";
+import { isEngine } from "./engines";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Absorbs tick jitter: an hourly tick firing a few minutes late must not
@@ -34,10 +34,14 @@ export async function submitPromptOnce(
 ): Promise<SubmittedResult[]> {
   const db = getDb();
   const callbackUrl = webhookCallbackUrl() ?? undefined;
+  // A prompt saved before cloro discontinued Grok can still list "grok".
+  // Skip the engines that cloro no longer serves.
+  const engines = prompt.engines.filter(isEngine);
+  if (engines.length === 0) return [];
 
   const settled = await Promise.allSettled(
-    prompt.engines.map((engine) =>
-      submitTask(engine as Engine, prompt.prompt, prompt.country, {
+    engines.map((engine) =>
+      submitTask(engine, prompt.prompt, prompt.country, {
         webhookUrl: callbackUrl,
       }),
     ),
@@ -47,13 +51,13 @@ export async function submitPromptOnce(
     outcome.status === "fulfilled"
       ? {
           promptId: prompt.id,
-          engine: prompt.engines[index],
+          engine: engines[index],
           taskId: outcome.value,
           status: "pending" as const,
         }
       : {
           promptId: prompt.id,
-          engine: prompt.engines[index],
+          engine: engines[index],
           status: "failed" as const,
           error:
             outcome.reason instanceof Error
