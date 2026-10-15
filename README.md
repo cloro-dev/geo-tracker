@@ -16,8 +16,8 @@ Free tier all the way through.
 ---
 
 Configure prompts once; geo-tracker runs them on a schedule against
-ChatGPT, Gemini, Copilot, Perplexity (currently unavailable), Google AI
-Mode, Google Search and Google News — powered by the
+ChatGPT, Gemini, Copilot, Perplexity, Google AI Mode, Google Search and
+Google News — powered by the
 [cloro API](https://cloro.dev) — and stores every raw response in your own
 Postgres.
 
@@ -25,7 +25,7 @@ Postgres.
 click. Every capability is an MCP tool and a REST endpoint, so your agent
 configures the prompts, triggers the runs and reads the answers itself:
 
-> _"Track how ChatGPT and Copilot answer 'best CRM for startups', four
+> _"Track how ChatGPT and Perplexity answer 'best CRM for startups', four
 > times a day. Then tell me which brands they name most often."_
 
 That one sentence is a `create_prompt` call, a `run_prompt` call and a
@@ -108,7 +108,7 @@ claude mcp add --transport http geo-tracker \
 Then just ask:
 
 > _"Add a prompt called 'best crm tools' asking what the best CRM tools for
-> a small startup are. Track it on ChatGPT, Gemini and Copilot, four
+> a small startup are. Track it on ChatGPT, Gemini and Perplexity, four
 > times a day. Run it now and show me the results."_
 
 The agent calls `create_prompt`, then `run_prompt`, then `get_results`.
@@ -129,7 +129,7 @@ curl -X POST https://<your-app>.vercel.app/api/prompts \
   -d '{
     "name": "best crm tools",
     "prompt": "What are the best CRM tools for a small startup?",
-    "engines": ["chatgpt", "gemini", "copilot"],
+    "engines": ["chatgpt", "gemini", "perplexity"],
     "country": "US",
     "runsPerDay": 4
   }'
@@ -181,12 +181,6 @@ All endpoints except the webhook require
 Engines: `chatgpt`, `gemini`, `copilot`, `perplexity`, `aimode`, `google`,
 `google-news`.
 
-`perplexity` is temporarily unavailable upstream: the cloro API rejects every
-Perplexity request with a `400` (`MODEL_UNAVAILABLE`), so a prompt that
-includes it records a failed result on every scheduled tick. Leave it out of
-your prompts until the [changelog](https://cloro.dev/docs/changelog) says it
-is back.
-
 `grok` is discontinued. grok.com now shows a sign-up wall to logged-out
 visitors, so cloro cannot get Grok answers. A prompt that still lists `grok`
 skips it. Old Grok results stay readable: `engine=grok` still works as a
@@ -218,7 +212,7 @@ pull the stored answers, which is the whole product surface.
 Things worth asking an agent once it is connected:
 
 - "Add these ten questions our buyers ask, tracked daily on ChatGPT and
-  Copilot."
+  Perplexity."
 - "Which brands does Gemini name when asked about us, and how has that
   changed this month?"
 - "Run every prompt now and summarise what changed since yesterday."
