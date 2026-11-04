@@ -315,8 +315,9 @@ Nothing is missing while it runs. The old rows stay until each result is
 rebuilt, so the dashboard shows values that are stale, never blank.
 
 `result_search_queries` holds a third thing: the literal queries the
-engines typed before retrieving anything. ChatGPT, Copilot, Grok and
-Perplexity report these; the others do not.
+engines typed before retrieving anything. ChatGPT, Copilot and Perplexity
+report these; the others do not. Grok results from before its discontinuation
+can also have them.
 
 To watch a competitor without tracking it, add its name to
 `lib/brand-candidates.json`, with any alternative spellings:
