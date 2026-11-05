@@ -94,15 +94,20 @@ describe.skipIf(!hasDatabase)("runner (needs a database)", () => {
       expect(new Set(submitted.map((r) => r.taskId)).size).toBe(2);
     });
 
-    // cloro discontinued Grok. A prompt saved before that can still list it.
+    // cloro discontinued Grok, Copilot and Perplexity. A prompt saved before
+    // that can still list them.
     it("skips an engine that cloro no longer serves", async () => {
-      const prompt = await insertPrompt({ engines: ["chatgpt", "grok"] });
+      const prompt = await insertPrompt({
+        engines: ["chatgpt", "grok", "copilot", "perplexity"],
+      });
       const submitted = await submitPromptOnce(prompt);
 
       expect(submitted.map((r) => r.engine)).toEqual(["chatgpt"]);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(
-        await submitPromptOnce(await insertPrompt({ engines: ["grok"] })),
+        await submitPromptOnce(
+          await insertPrompt({ engines: ["grok", "copilot", "perplexity"] }),
+        ),
       ).toEqual([]);
     });
 

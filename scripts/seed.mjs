@@ -60,7 +60,7 @@ const PROMPTS = [
   "which CRM integrates with Slack",
 ];
 
-const ENGINES = ["chatgpt", "perplexity", "gemini", "aimode", "google"];
+const ENGINES = ["chatgpt", "gemini", "aimode", "google"];
 
 // Third-party pages the engines cite. Two are strong (cited constantly),
 // the rest thin out — a realistic long tail for "pages to get listed on".
@@ -89,7 +89,6 @@ const PUBLISHER_PAGES = [
  */
 const MENTION_RATE = {
   chatgpt: { Acme: 0.55, Globex: 0.8, Initech: 0.2, Umbrella: 0 },
-  perplexity: { Acme: 0.45, Globex: 0.7, Initech: 0.35, Umbrella: 0 },
   gemini: { Acme: 0.3, Globex: 0.75, Initech: 0.15, Umbrella: 0 },
   aimode: { Acme: 0.4, Globex: 0.6, Initech: 0.25, Umbrella: 0 },
   // Google writes prose only when an AI Overview was served.
@@ -178,14 +177,13 @@ function sourceList(named, alsoCited, promptIndex = 0) {
   return links.map((link, index) => ({ position: index + 1, ...link }));
 }
 
-/** The queries an engine says it ran, and the follow-ups it offers. */
+/** The queries an engine says it ran. */
 function queryFanOut(query) {
   const issued = [
     query,
     `${query} ${pick(["2026", "reviews", "pricing", "vs"])}`,
   ];
-  const suggested = [`best ${pick(["free", "cheap", "enterprise"])} ${query}`];
-  return { issued, suggested };
+  return { issued };
 }
 
 /** The payload shape cloro returns, per engine. */
@@ -205,18 +203,10 @@ function buildResponse(engine, query, named, alsoCited, promptIndex) {
           label: source.label,
           domain: new URL(source.url).hostname,
         })),
-        // Only some engines report what they searched. Perplexity names the
-        // field differently, and Gemini reports nothing at all — so a panel
-        // that pooled them would quietly under-count.
-        ...(engine === "chatgpt" || engine === "copilot"
-          ? { searchQueries: fanOut.issued }
-          : {}),
-        ...(engine === "perplexity"
-          ? {
-              search_model_queries: fanOut.issued,
-              related_queries: fanOut.suggested,
-            }
-          : {}),
+        // Only ChatGPT reports what it searched. Gemini and AI Mode report
+        // nothing at all, so a panel that pooled them would quietly
+        // under-count.
+        ...(engine === "chatgpt" ? { searchQueries: fanOut.issued } : {}),
       },
     };
   }

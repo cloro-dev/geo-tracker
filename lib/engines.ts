@@ -2,8 +2,6 @@
 export const ENGINES = [
   "chatgpt",
   "gemini",
-  "copilot",
-  "perplexity",
   "aimode",
   "google",
   "google-news",
@@ -12,14 +10,17 @@ export const ENGINES = [
 export type Engine = (typeof ENGINES)[number];
 
 // The engines that can appear in stored results. cloro discontinued Grok,
-// but Grok results from before that stay readable.
-export const RESULT_ENGINES = [...ENGINES, "grok"] as const;
+// Copilot and Perplexity, but their results from before that stay readable.
+export const RESULT_ENGINES = [
+  ...ENGINES,
+  "copilot",
+  "perplexity",
+  "grok",
+] as const;
 
 const TASK_TYPES: Record<Engine, string> = {
   chatgpt: "CHATGPT",
   gemini: "GEMINI",
-  copilot: "COPILOT",
-  perplexity: "PERPLEXITY",
   aimode: "AIMODE",
   google: "GOOGLE",
   "google-news": "GOOGLE_NEWS",

@@ -15,17 +15,16 @@ Free tier all the way through.
 
 ---
 
-Configure prompts once; geo-tracker runs them on a schedule against
-ChatGPT, Gemini, Copilot, Perplexity, Google AI Mode, Google Search and
-Google News — powered by the
-[cloro API](https://cloro.dev) — and stores every raw response in your own
+Configure prompts once. geo-tracker runs them on a schedule against
+ChatGPT, Gemini, Google AI Mode, Google Search and Google News through the
+[cloro API](https://cloro.dev), and stores every raw response in your own
 Postgres.
 
 **Built to be driven by an agent, not by a dashboard.** There is no UI to
 click. Every capability is an MCP tool and a REST endpoint, so your agent
 configures the prompts, triggers the runs and reads the answers itself:
 
-> _"Track how ChatGPT and Perplexity answer 'best CRM for startups', four
+> _"Track how ChatGPT and Gemini answer 'best CRM for startups', four
 > times a day. Then tell me which brands they name most often."_
 
 That one sentence is a `create_prompt` call, a `run_prompt` call and a
@@ -108,7 +107,7 @@ claude mcp add --transport http geo-tracker \
 Then just ask:
 
 > _"Add a prompt called 'best crm tools' asking what the best CRM tools for
-> a small startup are. Track it on ChatGPT, Gemini and Perplexity, four
+> a small startup are. Track it on ChatGPT, Gemini and AI Mode, four
 > times a day. Run it now and show me the results."_
 
 The agent calls `create_prompt`, then `run_prompt`, then `get_results`.
@@ -129,7 +128,7 @@ curl -X POST https://<your-app>.vercel.app/api/prompts \
   -d '{
     "name": "best crm tools",
     "prompt": "What are the best CRM tools for a small startup?",
-    "engines": ["chatgpt", "gemini", "perplexity"],
+    "engines": ["chatgpt", "gemini", "aimode"],
     "country": "US",
     "runsPerDay": 4
   }'
@@ -178,13 +177,16 @@ All endpoints except the webhook require
 | `POST`   | `/api/webhook`         | cloro result callback — auth via token in the callback URL                          |
 | `*`      | `/api/mcp`             | MCP endpoint (Streamable HTTP)                                                      |
 
-Engines: `chatgpt`, `gemini`, `copilot`, `perplexity`, `aimode`, `google`,
-`google-news`.
+Engines: `chatgpt`, `gemini`, `aimode`, `google`, `google-news`.
 
-`grok` is discontinued. grok.com now shows a sign-up wall to logged-out
-visitors, so cloro cannot get Grok answers. A prompt that still lists `grok`
-skips it. Old Grok results stay readable: `engine=grok` still works as a
-results filter.
+`copilot`, `perplexity` and `grok` are discontinued. A prompt that still
+lists one of them skips it. Old results stay readable: `engine=copilot`,
+`engine=perplexity` and `engine=grok` still work as results filters.
+
+- `grok` (15 October 2026): grok.com shows a sign-up wall to logged-out
+  visitors, so cloro cannot get Grok answers.
+- `copilot`: Copilot blocks access for logged-out sessions.
+- `perplexity`: Perplexity blocks access for logged-out sessions.
 
 `GET /api/results` filters (query params): `promptId`, `engine`,
 `status` (`pending` | `completed` | `failed`), `from`, `to` (ISO dates),
@@ -212,7 +214,7 @@ pull the stored answers, which is the whole product surface.
 Things worth asking an agent once it is connected:
 
 - "Add these ten questions our buyers ask, tracked daily on ChatGPT and
-  Perplexity."
+  Gemini."
 - "Which brands does Gemini name when asked about us, and how has that
   changed this month?"
 - "Run every prompt now and summarise what changed since yesterday."
@@ -315,9 +317,9 @@ Nothing is missing while it runs. The old rows stay until each result is
 rebuilt, so the dashboard shows values that are stale, never blank.
 
 `result_search_queries` holds a third thing: the literal queries the
-engines typed before retrieving anything. ChatGPT, Copilot and Perplexity
-report these; the others do not. Grok results from before its discontinuation
-can also have them.
+engines typed before retrieving anything. Of the engines a prompt can track,
+only ChatGPT reports these. Copilot, Grok and Perplexity results from before
+their discontinuation can also have them.
 
 To watch a competitor without tracking it, add its name to
 `lib/brand-candidates.json`, with any alternative spellings:
@@ -390,12 +392,12 @@ figures below include the derived rows:
 | ------------------------------ | ----------- | ------------- | ------------ |
 | 10 prompts × 3 engines × 1/day | 30          | ~23 MB        | ~1.8 years   |
 | 20 prompts × 4 engines × 4/day | 320         | ~240 MB       | ~2 months    |
-| 50 prompts × 6 engines × 8/day | 2,400       | ~1.8 GB       | ~8 days      |
+| 50 prompts × 5 engines × 8/day | 2,000       | ~1.5 GB       | ~10 days     |
 
 Deleting a result cascades to its derived rows, so a retention policy
 needs no extra step.
 
-The same workloads use under 1%, 1% and 7% of Vercel's free monthly
+The same workloads use under 1%, 1% and 6% of Vercel's free monthly
 function invocations, so the compute side stays free throughout.
 
 Past light usage, schedule the retention query in
