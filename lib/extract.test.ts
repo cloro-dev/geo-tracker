@@ -281,6 +281,7 @@ describe("extractSearchQueries", () => {
     ]);
   });
 
+  // cloro discontinued Perplexity, but its old results stay readable.
   it("reads Perplexity's differently-named field as the same thing", () => {
     const queries = extractSearchQueries({
       result: { search_model_queries: ["find the best crm"] },

@@ -34,8 +34,8 @@ export async function submitPromptOnce(
 ): Promise<SubmittedResult[]> {
   const db = getDb();
   const callbackUrl = webhookCallbackUrl() ?? undefined;
-  // A prompt saved before cloro discontinued Grok can still list "grok".
-  // Skip the engines that cloro no longer serves.
+  // A prompt saved before cloro discontinued Grok, Copilot and Perplexity
+  // can still list them. Skip the engines that cloro no longer serves.
   const engines = prompt.engines.filter(isEngine);
   if (engines.length === 0) return [];
 

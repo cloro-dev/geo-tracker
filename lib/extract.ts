@@ -384,9 +384,10 @@ export function extractMentions(
 /**
  * The queries an engine typed, and the follow-ups it offered.
  *
- * Only ChatGPT, Copilot, Grok and Perplexity report what they searched;
- * the rest return nothing here, and an empty result for those is the
- * honest answer rather than missing data.
+ * Of the engines a prompt can track, only ChatGPT reports what it
+ * searched. The rest return nothing here, and an empty result for those is
+ * the honest answer rather than missing data. Copilot, Grok and Perplexity
+ * results from before cloro discontinued those engines also have queries.
  */
 export function extractSearchQueries(response: unknown): ExtractedQuery[] {
   const result = unwrap(response);
@@ -404,8 +405,8 @@ export function extractSearchQueries(response: unknown): ExtractedQuery[] {
     queries.push({ kind, position: queries.length + 1, query });
   };
 
-  // What the model actually searched. Perplexity names the same thing
-  // differently; both are the engine's own reformulation of the prompt.
+  // What the model actually searched. Old Perplexity results name the same
+  // thing differently; both are the engine's own reformulation of the prompt.
   for (const item of asArray(result.searchQueries)) push("issued", item);
   for (const item of asArray(result.search_model_queries)) {
     push("issued", item);
