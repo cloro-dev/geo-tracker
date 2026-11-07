@@ -142,6 +142,26 @@ describe("extractSources", () => {
     ]);
   });
 
+  // Bing AI Mode returns the chat-engine shape. Its optional `html` is a CDN
+  // URL to a page snapshot, not a page that the engine cited.
+  it("reads a Bing AI Mode answer and ignores its markdown and html", () => {
+    const response = {
+      success: true,
+      result: {
+        text: "Acme is a good pick.",
+        sources: [{ position: 1, url: "https://a.com/1", label: "A" }],
+        citationPills: [{ position: 1, url: "https://b.com/2", label: "B" }],
+        markdown: "Acme is a [good pick](https://md.com/x).",
+        html: "https://cdn.example.com/snapshot.html",
+      },
+    };
+    expect(answerText(response)).toBe("Acme is a good pick.");
+    expect(extractSources(response).map((s) => [s.kind, s.domain])).toEqual([
+      ["source", "a.com"],
+      ["citation_pill", "b.com"],
+    ]);
+  });
+
   it("skips entries with no usable URL instead of failing the batch", () => {
     const sources = extractSources({
       result: { sources: [{ url: "" }, { url: "javascript:void" }, null, 7] },

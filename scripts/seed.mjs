@@ -60,7 +60,7 @@ const PROMPTS = [
   "which CRM integrates with Slack",
 ];
 
-const ENGINES = ["chatgpt", "gemini", "aimode", "google"];
+const ENGINES = ["chatgpt", "gemini", "aimode", "bing-aimode", "google"];
 
 // Third-party pages the engines cite. Two are strong (cited constantly),
 // the rest thin out — a realistic long tail for "pages to get listed on".
@@ -91,6 +91,7 @@ const MENTION_RATE = {
   chatgpt: { Acme: 0.55, Globex: 0.8, Initech: 0.2, Umbrella: 0 },
   gemini: { Acme: 0.3, Globex: 0.75, Initech: 0.15, Umbrella: 0 },
   aimode: { Acme: 0.4, Globex: 0.6, Initech: 0.25, Umbrella: 0 },
+  "bing-aimode": { Acme: 0.35, Globex: 0.5, Initech: 0.3, Umbrella: 0 },
   // Google writes prose only when an AI Overview was served.
   google: { Acme: 0.25, Globex: 0.4, Initech: 0.1, Umbrella: 0 },
 };
@@ -203,9 +204,9 @@ function buildResponse(engine, query, named, alsoCited, promptIndex) {
           label: source.label,
           domain: new URL(source.url).hostname,
         })),
-        // Only ChatGPT reports what it searched. Gemini and AI Mode report
-        // nothing at all, so a panel that pooled them would quietly
-        // under-count.
+        // Only ChatGPT reports what it searched. Gemini, Google AI Mode and
+        // Bing AI Mode report nothing at all, so a panel that pooled them
+        // would quietly under-count.
         ...(engine === "chatgpt" ? { searchQueries: fanOut.issued } : {}),
       },
     };

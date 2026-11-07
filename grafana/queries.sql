@@ -74,7 +74,7 @@ SELECT c.name AS "Name",
   JOIN results r ON r.id = c.result_id
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google')
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google')
     AND lower(c.name) NOT IN (SELECT lower(name) FROM brands)
   GROUP BY c.name
   ORDER BY sum(c.mention_count) DESC
@@ -90,7 +90,7 @@ SELECT b.name || CASE WHEN b.is_own THEN ' (us)' ELSE '' END AS "Brand",
   JOIN results r ON r.id = m.result_id
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google')
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google')
   GROUP BY b.id, b.name, b.is_own
   ORDER BY "Named %" DESC;
 
@@ -103,7 +103,7 @@ SELECT date_trunc('day', r.completed_at) AS "time",
   JOIN results r ON r.id = m.result_id
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google')
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google')
   GROUP BY 1, b.name
   ORDER BY 1;
 
@@ -116,7 +116,7 @@ SELECT date_trunc('day', r.completed_at) AS "time",
   JOIN results r ON r.id = m.result_id
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
   GROUP BY 1, r.engine
   ORDER BY 1;
 
@@ -132,7 +132,7 @@ SELECT s.domain AS "Domain",
     ON own.result_id = s.result_id AND own.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google')
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google')
     AND s.domain NOT IN (SELECT unnest(domains) FROM brands)
     AND s.url ILIKE '%' || '' || '%'
   GROUP BY s.domain
@@ -151,7 +151,7 @@ SELECT s.domain AS "Domain",
     ON own.result_id = s.result_id AND own.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google')
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google')
     AND s.domain IN (
       SELECT unnest(domains) FROM brands WHERE is_own AND enabled
     )
@@ -170,7 +170,7 @@ SELECT coalesce(s.label, regexp_replace(s.url, '^https?://', '')) AS "Video",
     ON own.result_id = s.result_id AND own.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google')
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google')
     AND (s.domain = 'youtube.com' OR s.domain = 'youtu.be'
          OR s.domain LIKE '%.youtube.com')
   GROUP BY s.url, s.label
@@ -189,7 +189,7 @@ SELECT coalesce(s.label, regexp_replace(s.url, '^https?://', '')) AS "Post",
     ON own.result_id = s.result_id AND own.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google')
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google')
     AND (s.domain = 'reddit.com' OR s.domain = 'redd.it'
          OR s.domain LIKE '%.reddit.com')
   GROUP BY s.url, s.label
@@ -208,7 +208,7 @@ SELECT p.name AS "Prompt",
   JOIN prompts p ON p.id = r.prompt_id
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google') AND m.brand_id = (SELECT id FROM brands WHERE is_own AND enabled LIMIT 1)
   GROUP BY p.id, p.name
   ORDER BY "Named %" ASC;
 
@@ -219,7 +219,7 @@ WITH per_prompt AS (
     JOIN results r ON r.id = s.result_id
     WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google')
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google')
     GROUP BY r.prompt_id, s.domain
   )
   SELECT p1.name AS "Prompt",
@@ -245,7 +245,7 @@ SELECT date_trunc('day', r.completed_at) AS "time",
     ON s.result_id = r.id
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google')
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google')
   GROUP BY 1, r.engine
   ORDER BY 1;
 
@@ -258,7 +258,7 @@ SELECT q.query AS "Query",
   JOIN results r ON r.id = q.result_id
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt','gemini','aimode','google') AND q.kind = 'issued'
+    AND r.engine IN ('chatgpt','gemini','aimode','bing-aimode','google') AND q.kind = 'issued'
   GROUP BY q.query
   ORDER BY count(*) DESC, q.query
   LIMIT 40;

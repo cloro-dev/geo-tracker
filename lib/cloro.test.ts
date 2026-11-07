@@ -51,6 +51,15 @@ describe("submitTask", () => {
     });
   });
 
+  it("posts a Bing AI Mode task with a prompt, not a query", async () => {
+    fetchMock.mockResolvedValue(ok({ task: { id: "task_3" } }));
+    await submitTask("bing-aimode", "who sells CRMs?", "GB");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      taskType: "BING_AIMODE",
+      payload: { prompt: "who sells CRMs?", country: "GB" },
+    });
+  });
+
   it("omits the webhook when there is no public URL", async () => {
     fetchMock.mockResolvedValue(ok({ task: { id: "task_2" } }));
     await submitTask("google", "crm tools", "US");
