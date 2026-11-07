@@ -11,15 +11,18 @@ describe("toTaskType", () => {
 
   it("converts the hyphenated slug to an underscored task type", () => {
     expect(toTaskType("google-news")).toBe("GOOGLE_NEWS");
+    expect(toTaskType("bing-aimode")).toBe("BING_AIMODE");
   });
 });
 
 describe("buildPayload", () => {
   it("sends `prompt` to the AI engines", () => {
-    expect(buildPayload("chatgpt", "who sells CRMs?", "US")).toEqual({
-      prompt: "who sells CRMs?",
-      country: "US",
-    });
+    for (const engine of ["chatgpt", "aimode", "bing-aimode"] as const) {
+      expect(buildPayload(engine, "who sells CRMs?", "US")).toEqual({
+        prompt: "who sells CRMs?",
+        country: "US",
+      });
+    }
   });
 
   // The google endpoints reject a body that carries `prompt`, so this
@@ -45,6 +48,7 @@ describe("buildPayload", () => {
 describe("isEngine", () => {
   it("accepts known slugs and rejects everything else", () => {
     expect(isEngine("gemini")).toBe(true);
+    expect(isEngine("bing-aimode")).toBe(true);
     expect(isEngine("bing")).toBe(false);
     expect(isEngine("grok")).toBe(false);
     expect(isEngine("copilot")).toBe(false);

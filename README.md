@@ -16,9 +16,9 @@ Free tier all the way through.
 ---
 
 Configure prompts once. geo-tracker runs them on a schedule against
-ChatGPT, Gemini, Google AI Mode, Google Search and Google News through the
-[cloro API](https://cloro.dev), and stores every raw response in your own
-Postgres.
+ChatGPT, Gemini, Google AI Mode, Bing AI Mode, Google Search and Google
+News through the [cloro API](https://cloro.dev), and stores every raw
+response in your own Postgres.
 
 **Built to be driven by an agent, not by a dashboard.** There is no UI to
 click. Every capability is an MCP tool and a REST endpoint, so your agent
@@ -177,7 +177,17 @@ All endpoints except the webhook require
 | `POST`   | `/api/webhook`         | cloro result callback — auth via token in the callback URL                          |
 | `*`      | `/api/mcp`             | MCP endpoint (Streamable HTTP)                                                      |
 
-Engines: `chatgpt`, `gemini`, `aimode`, `google`, `google-news`.
+Engines: `chatgpt`, `gemini`, `aimode` (Google AI Mode), `bing-aimode`
+(Bing AI Mode), `google`, `google-news`.
+
+`bing-aimode` has these limits:
+
+- The prompt can have a maximum of 3,500 characters after URL encoding.
+  Non-Latin scripts encode to more characters, so their limit is lower.
+- The country cannot be BY, CN, IR, RU, SY or VE.
+
+geo-tracker does not check these limits. A run that does not obey them
+fails, and geo-tracker stores it as `failed` for that engine only.
 
 `copilot`, `perplexity` and `grok` are discontinued. A prompt that still
 lists one of them skips it. Old results stay readable: `engine=copilot`,
@@ -392,12 +402,12 @@ figures below include the derived rows:
 | ------------------------------ | ----------- | ------------- | ------------ |
 | 10 prompts × 3 engines × 1/day | 30          | ~23 MB        | ~1.8 years   |
 | 20 prompts × 4 engines × 4/day | 320         | ~240 MB       | ~2 months    |
-| 50 prompts × 5 engines × 8/day | 2,000       | ~1.5 GB       | ~10 days     |
+| 50 prompts × 6 engines × 8/day | 2,400       | ~1.8 GB       | ~8 days      |
 
 Deleting a result cascades to its derived rows, so a retention policy
 needs no extra step.
 
-The same workloads use under 1%, 1% and 6% of Vercel's free monthly
+The same workloads use under 1%, 1% and 7% of Vercel's free monthly
 function invocations, so the compute side stays free throughout.
 
 Past light usage, schedule the retention query in

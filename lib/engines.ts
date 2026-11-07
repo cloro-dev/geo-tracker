@@ -3,6 +3,7 @@ export const ENGINES = [
   "chatgpt",
   "gemini",
   "aimode",
+  "bing-aimode",
   "google",
   "google-news",
 ] as const;
@@ -22,6 +23,7 @@ const TASK_TYPES: Record<Engine, string> = {
   chatgpt: "CHATGPT",
   gemini: "GEMINI",
   aimode: "AIMODE",
+  "bing-aimode": "BING_AIMODE",
   google: "GOOGLE",
   "google-news": "GOOGLE_NEWS",
 };
