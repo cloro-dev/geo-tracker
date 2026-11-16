@@ -346,6 +346,97 @@ you, and it cannot find a brand nobody wrote down.
 Nothing here scores or ranks an answer. It records whether a name is
 present. What that means is the agent's call.
 
+## How do you calculate share of voice and how many samples do you need?
+
+The two brand tables above give three different numbers per brand. They
+answer different questions, and they can put brands in a different order.
+
+| Measure | Formula | From |
+| --- | --- | --- |
+| Mention rate | answers that name the brand / answers | `result_brand_mentions.mentioned` |
+| Citation rate | answers whose cited links include a brand domain / answers | `result_sources.domain` against `brands.domains` |
+| Share of voice | answers that name the brand / sum of the same count over every enabled brand | `result_brand_mentions.mentioned` |
+
+"Answers" here means completed results that carry prose: the answer of a
+chat engine, or the AI Overview of a Google result. A Google result with no
+AI Overview has a row for each brand with `mentioned = false`, so it is left
+out of the denominator. Share of voice depends on the brand list: when you
+add a brand, the share of every other brand goes down, and the history is
+re-derived with it.
+
+The query below computes all three over the last 30 days:
+
+```sql
+-- Mention rate, citation rate and share of voice per tracked brand, last 30 days.
+WITH answers AS (  -- results that carry an answer: AI prose or an AI Overview
+  SELECT r.id
+  FROM results r
+  WHERE r.status = 'completed'
+    AND r.completed_at > now() - interval '30 days'
+    AND r.engine IN ('chatgpt', 'gemini', 'aimode', 'bing-aimode', 'google')
+    AND coalesce(r.response #>> '{result,text}',
+                 r.response #>> '{result,aioverview,text}', '') <> ''
+),
+scored AS (
+  SELECT b.name,
+         m.mentioned,
+         EXISTS (  -- a brand domain among the answer's citations (not organic links or ads)
+           SELECT 1
+           FROM result_sources s, unnest(b.domains) AS d(domain)
+           WHERE s.result_id = m.result_id
+             AND s.kind IN ('source', 'citation_pill', 'ai_overview')
+             AND (s.domain = lower(d.domain) OR s.domain LIKE '%.' || lower(d.domain))
+         ) AS cited
+  FROM result_brand_mentions m
+  JOIN answers a ON a.id = m.result_id
+  JOIN brands b ON b.id = m.brand_id
+  WHERE b.enabled
+),
+per_brand AS (
+  SELECT name,
+         count(*) AS answers,
+         count(*) FILTER (WHERE mentioned) AS named,
+         count(*) FILTER (WHERE cited) AS cited
+  FROM scored
+  GROUP BY name
+)
+SELECT name AS brand,
+       round(100.0 * named / answers, 1) AS mention_rate_pct,
+       round(100.0 * cited / answers, 1) AS citation_rate_pct,
+       round(100.0 * named / nullif(sum(named) OVER (), 0), 1) AS share_of_voice_pct
+FROM per_brand
+ORDER BY share_of_voice_pct DESC NULLS LAST;
+```
+
+The citation rate reads `result_sources` and not `result_brand_mentions.cited`.
+The `cited` column counts a brand domain in any link of the payload, and on
+a Google result that includes the organic results and the ads. The query
+keeps only the links the answer cites (`source`, `citation_pill` and
+`ai_overview`). To split the numbers by engine, carry `r.engine` through each
+step, add it to the `GROUP BY`, and use `sum(named) OVER (PARTITION BY engine)`.
+
+**How many runs does a mention rate need?** Each answer either names the
+brand or does not, so a mention rate behaves like a binomial proportion. For
+a 95% interval of plus or minus E around a rate p, you need about
+n = 1.96² × p × (1 - p) / E² answers:
+
+| Mention rate p | Runs for ±10 points | Runs for ±5 points |
+| --- | ---: | ---: |
+| 0.1 | 35 | 139 |
+| 0.3 | 81 | 323 |
+| 0.5 | 97 | 385 |
+
+With `runsPerDay: 1`, one prompt on one engine gives 7 answers a week, so a
+weekly rate for one prompt is accurate to about ±37 points at p = 0.5. To get
+closer, add runs (`runsPerDay`), add engines, or report the rate over a set of
+prompts rather than over one.
+
+Answers for the same prompt also change from run to run. In cloro's own
+monitoring of five AI engines over 30 days (October 17 to November 15, 2026),
+a brand named in one day's answer was named again the next day 67% of the time
+at the median, and the two days' brand lists had a median Jaccard overlap of
+0.40. Compare rates over many runs, never two single answers.
+
 ## Grafana
 
 A ready-made dashboard (run volume, success rate, credits burn, failures)
