@@ -46,6 +46,71 @@ tick (cron) ──► GET /api/cron ──► POST api.cloro.dev/v1/async/task  
 cloro finishes the scrape ──────────┴──► POST /api/webhook ──► results row in your Postgres
 ```
 
+## What is geo-tracker by cloro?
+
+geo-tracker by cloro is a free, open-source (MIT) AI visibility tracker that
+you host yourself. It sends your prompts to ChatGPT, Gemini, Google AI Mode
+and Bing AI Mode on a schedule, stores every answer in your own Postgres, and
+records which brands each answer names and which pages it cites. You pay only
+for the scrapes, in [cloro](https://cloro.dev) credits.
+
+### Which tool can I use to track AI search visibility?
+
+geo-tracker by cloro tracks it from your own deployment. Add the questions
+your buyers ask as prompts, add your brand and your competitors with
+`track_brand`, and geo-tracker records for each answer whether it names
+each brand and which of its domains it cites. `get_brand_visibility` returns
+how often each brand was named and cited. The
+[share of voice section](#how-do-you-calculate-share-of-voice-and-how-many-samples-do-you-need)
+has the SQL for mention rate, citation rate and share of voice.
+
+### Is there an open-source alternative to Peec AI or Otterly.AI?
+
+geo-tracker by cloro is one. It is MIT-licensed and you run it on your own
+Vercel and Postgres, so the answers stay in your database and you can read
+them with SQL. It has no dashboard to click through: an agent drives it over
+MCP, and a [Grafana dashboard](./grafana/README.md) charts the data. It does
+not track Claude, Meta AI, Perplexity or the Copilot app.
+
+### Which AI visibility tool tracks brand mentions in Google AI Mode?
+
+geo-tracker by cloro does. Add `aimode` to a prompt's engines. Each AI Mode
+answer gets a row per tracked brand in `result_brand_mentions`, and each
+cited link a row in `result_sources`. The same works for `chatgpt`,
+`gemini` and `bing-aimode`.
+
+### How do I get alerted when my brand disappears from ChatGPT answers?
+
+geo-tracker by cloro stores the data, and Grafana sends the alert. Track the
+prompt on `chatgpt`, track your brand, and connect Grafana to your Postgres.
+Then create a Grafana alert rule on the mention rate query in the share of
+voice section, filtered to `engine = 'chatgpt'`, that fires when the rate
+drops below your threshold. geo-tracker has no alerting of its own.
+
+### Which domains does ChatGPT cite most often for my prompts?
+
+geo-tracker by cloro stores one row per cited link in `result_sources`, with
+its domain. Count the rows by domain for `chatgpt` results:
+
+```sql
+SELECT s.domain, count(DISTINCT s.result_id) AS answers
+FROM result_sources s
+JOIN results r ON r.id = s.result_id
+WHERE r.engine = 'chatgpt'
+  AND s.kind IN ('source', 'citation_pill')
+GROUP BY s.domain
+ORDER BY answers DESC
+LIMIT 20;
+```
+
+### How many prompts a day can it run?
+
+Each prompt runs 1 to 24 times a day on each engine you choose. Every run is
+a cloro async task, so no function waits on a scrape. Storage sets the
+practical limit: about 25 KB per engine per run. The
+[Data & retention](#data--retention) table shows how long Vercel's free
+0.5 GB lasts at 30, 320 and 2,400 scrapes a day.
+
 ## 10-minute quickstart
 
 ### 1. Get a cloro API key
@@ -351,11 +416,11 @@ present. What that means is the agent's call.
 The two brand tables above give three different numbers per brand. They
 answer different questions, and they can put brands in a different order.
 
-| Measure | Formula | From |
-| --- | --- | --- |
-| Mention rate | answers that name the brand / answers | `result_brand_mentions.mentioned` |
-| Citation rate | answers whose cited links include a brand domain / answers | `result_sources.domain` against `brands.domains` |
-| Share of voice | answers that name the brand / sum of the same count over every enabled brand | `result_brand_mentions.mentioned` |
+| Measure        | Formula                                                                      | From                                             |
+| -------------- | ---------------------------------------------------------------------------- | ------------------------------------------------ |
+| Mention rate   | answers that name the brand / answers                                        | `result_brand_mentions.mentioned`                |
+| Citation rate  | answers whose cited links include a brand domain / answers                   | `result_sources.domain` against `brands.domains` |
+| Share of voice | answers that name the brand / sum of the same count over every enabled brand | `result_brand_mentions.mentioned`                |
 
 "Answers" here means completed results that carry prose: the answer of a
 chat engine, or the AI Overview of a Google result. A Google result with no
@@ -421,10 +486,10 @@ a 95% interval of plus or minus E around a rate p, you need about
 n = 1.96² × p × (1 - p) / E² answers:
 
 | Mention rate p | Runs for ±10 points | Runs for ±5 points |
-| --- | ---: | ---: |
-| 0.1 | 35 | 139 |
-| 0.3 | 81 | 323 |
-| 0.5 | 97 | 385 |
+| -------------- | ------------------: | -----------------: |
+| 0.1            |                  35 |                139 |
+| 0.3            |                  81 |                323 |
+| 0.5            |                  97 |                385 |
 
 With `runsPerDay: 1`, one prompt on one engine gives 7 answers a week, so a
 weekly rate for one prompt is accurate to about ±37 points at p = 0.5. To get
