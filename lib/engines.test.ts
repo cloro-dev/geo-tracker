@@ -29,12 +29,20 @@ describe("buildPayload", () => {
   // mapping is the difference between a run working and every google
   // result coming back as a validation failure.
   it("sends `query` to the google engines", () => {
-    for (const engine of ["google", "google-news"] as const) {
-      expect(buildPayload(engine, "crm tools", "GB")).toEqual({
-        query: "crm tools",
-        country: "GB",
-      });
-    }
+    expect(buildPayload("google-news", "crm tools", "GB")).toEqual({
+      query: "crm tools",
+      country: "GB",
+    });
+  });
+
+  // Without the flag cloro returns no AI Overview, and every Google result
+  // counts as an answer that names no brand.
+  it("asks google for the AI Overview", () => {
+    expect(buildPayload("google", "crm tools", "GB")).toEqual({
+      query: "crm tools",
+      country: "GB",
+      include: { aioverview: true },
+    });
   });
 
   it("never sends both fields", () => {

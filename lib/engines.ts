@@ -35,11 +35,16 @@ export function toTaskType(engine: Engine): string {
   return TASK_TYPES[engine];
 }
 
+// cloro returns the AI Overview of a Google search only when the request
+// asks for it, and charges 2 credits more for it.
 export function buildPayload(
   engine: Engine,
   prompt: string,
   country: string,
-): Record<string, string> {
+): Record<string, unknown> {
+  if (engine === "google") {
+    return { query: prompt, country, include: { aioverview: true } };
+  }
   return QUERY_ENGINES.has(engine)
     ? { query: prompt, country }
     : { prompt, country };

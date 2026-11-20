@@ -1,0 +1,7 @@
+#!/bin/sh
+# Runs the fast CI checks before each commit, so a format or type error
+# stops the commit here instead of failing CI. CI also runs the tests and
+# the build. `pnpm install` turns this hook on (the `prepare` script).
+set -e
+pnpm -s format:check
+pnpm -s typecheck

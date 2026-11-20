@@ -245,6 +245,9 @@ All endpoints except the webhook require
 Engines: `chatgpt`, `gemini`, `aimode` (Google AI Mode), `bing-aimode`
 (Bing AI Mode), `google`, `google-news`.
 
+`google` requests the AI Overview with each search, which costs 2 credits
+more than a search without it.
+
 `bing-aimode` has these limits:
 
 - The prompt can have a maximum of 3,500 characters after URL encoding.

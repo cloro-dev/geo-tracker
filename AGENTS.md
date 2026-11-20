@@ -28,7 +28,9 @@ docker run -d --name tracker-db -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:1
 
 ## Verify your change
 
-Run all four before you report a change as done. CI runs the same set:
+Run all four before you report a change as done. CI runs the same set.
+The pre-commit hook in `.githooks/` runs `format:check` and `typecheck` on
+every commit; `pnpm install` turns it on:
 
 ```bash
 pnpm test
