@@ -416,11 +416,11 @@ present. What that means is the agent's call.
 The two brand tables above give three different numbers per brand. They
 answer different questions, and they can put brands in a different order.
 
-| Measure | Formula | From |
-| --- | --- | --- |
-| Mention rate | answers that name the brand / answers | `result_brand_mentions.mentioned` |
-| Citation rate | answers whose cited links include a brand domain / answers | `result_sources.domain` against `brands.domains` |
-| Share of voice | answers that name the brand / sum of the same count over every enabled brand | `result_brand_mentions.mentioned` |
+| Measure        | Formula                                                                      | From                                             |
+| -------------- | ---------------------------------------------------------------------------- | ------------------------------------------------ |
+| Mention rate   | answers that name the brand / answers                                        | `result_brand_mentions.mentioned`                |
+| Citation rate  | answers whose cited links include a brand domain / answers                   | `result_sources.domain` against `brands.domains` |
+| Share of voice | answers that name the brand / sum of the same count over every enabled brand | `result_brand_mentions.mentioned`                |
 
 "Answers" here means completed results that carry prose: the answer of a
 chat engine, or the AI Overview of a Google result. A Google result with no
@@ -486,10 +486,10 @@ a 95% interval of plus or minus E around a rate p, you need about
 n = 1.96² × p × (1 - p) / E² answers:
 
 | Mention rate p | Runs for ±10 points | Runs for ±5 points |
-| --- | ---: | ---: |
-| 0.1 | 35 | 139 |
-| 0.3 | 81 | 323 |
-| 0.5 | 97 | 385 |
+| -------------- | ------------------: | -----------------: |
+| 0.1            |                  35 |                139 |
+| 0.3            |                  81 |                323 |
+| 0.5            |                  97 |                385 |
 
 With `runsPerDay: 1`, one prompt on one engine gives 7 answers a week, so a
 weekly rate for one prompt is accurate to about ±37 points at p = 0.5. To get
