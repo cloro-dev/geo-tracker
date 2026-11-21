@@ -1,8 +1,8 @@
 # geo-tracker
 
 **Agent-ready GEO (Generative Engine Optimization) + SEO tracker. An MCP
-server your agent drives: it schedules prompts across the AI engines and
-Google Search, and keeps every answer in your own Postgres.**
+server your agent drives: it schedules prompts across the AI engines,
+Google Search and Bing Search, and keeps every answer in your own Postgres.**
 
 ## ⚡ 1-click deploy this tool
 
@@ -16,9 +16,9 @@ Free tier all the way through.
 ---
 
 Configure prompts once. geo-tracker runs them on a schedule against
-ChatGPT, Gemini, Google AI Mode, Bing AI Mode, Google Search and Google
-News through the [cloro API](https://cloro.dev), and stores every raw
-response in your own Postgres.
+ChatGPT, Gemini, Google AI Mode, Bing AI Mode, Google Search, Google News
+and Bing Search through the [cloro API](https://cloro.dev), and stores
+every raw response in your own Postgres.
 
 **Built to be driven by an agent, not by a dashboard.** There is no UI to
 click. Every capability is an MCP tool and a REST endpoint, so your agent
@@ -243,16 +243,17 @@ All endpoints except the webhook require
 | `*`      | `/api/mcp`             | MCP endpoint (Streamable HTTP)                                                      |
 
 Engines: `chatgpt`, `gemini`, `aimode` (Google AI Mode), `bing-aimode`
-(Bing AI Mode), `google`, `google-news`.
+(Bing AI Mode), `google`, `google-news`, `bing` (Bing Search).
 
-`google` requests the AI Overview with each search, which costs 2 credits
-more than a search without it.
+`google` and `bing` request the AI Overview with each search, which costs 2
+credits more than a search without it.
 
-`bing-aimode` has these limits:
+`bing-aimode` and `bing` have these limits:
 
-- The prompt can have a maximum of 3,500 characters after URL encoding.
-  Non-Latin scripts encode to more characters, so their limit is lower.
-- The country cannot be BY, CN, IR, RU, SY or VE.
+- The prompt or query can have a maximum of 3,500 characters after URL
+  encoding. Non-Latin scripts encode to more characters, so their limit is
+  lower.
+- The country cannot be CN, KR or RU.
 
 geo-tracker does not check these limits. A run that does not obey them
 fails, and geo-tracker stores it as `failed` for that engine only.
@@ -426,9 +427,9 @@ answer different questions, and they can put brands in a different order.
 | Share of voice | answers that name the brand / sum of the same count over every enabled brand | `result_brand_mentions.mentioned`                |
 
 "Answers" here means completed results that carry prose: the answer of a
-chat engine, or the AI Overview of a Google result. A Google result with no
-AI Overview has a row for each brand with `mentioned = false`, so it is left
-out of the denominator. Share of voice depends on the brand list: when you
+chat engine, or the AI Overview of a Google or Bing result. A Google or
+Bing result with no AI Overview has a row for each brand with
+`mentioned = false`, so it is left out of the denominator. Share of voice depends on the brand list: when you
 add a brand, the share of every other brand goes down, and the history is
 re-derived with it.
 
@@ -441,7 +442,7 @@ WITH answers AS (  -- results that carry an answer: AI prose or an AI Overview
   FROM results r
   WHERE r.status = 'completed'
     AND r.completed_at > now() - interval '30 days'
-    AND r.engine IN ('chatgpt', 'gemini', 'aimode', 'bing-aimode', 'google')
+    AND r.engine IN ('chatgpt', 'gemini', 'aimode', 'bing-aimode', 'google', 'bing')
     AND coalesce(r.response #>> '{result,text}',
                  r.response #>> '{result,aioverview,text}', '') <> ''
 ),
@@ -478,8 +479,8 @@ ORDER BY share_of_voice_pct DESC NULLS LAST;
 
 The citation rate reads `result_sources` and not `result_brand_mentions.cited`.
 The `cited` column counts a brand domain in any link of the payload, and on
-a Google result that includes the organic results and the ads. The query
-keeps only the links the answer cites (`source`, `citation_pill` and
+a Google or Bing result that includes the organic results and the ads. The
+query keeps only the links the answer cites (`source`, `citation_pill` and
 `ai_overview`). To split the numbers by engine, carry `r.engine` through each
 step, add it to the `GROUP BY`, and use `sum(named) OVER (PARTITION BY engine)`.
 
@@ -561,12 +562,12 @@ figures below include the derived rows:
 | ------------------------------ | ----------- | ------------- | ------------ |
 | 10 prompts × 3 engines × 1/day | 30          | ~23 MB        | ~1.8 years   |
 | 20 prompts × 4 engines × 4/day | 320         | ~240 MB       | ~2 months    |
-| 50 prompts × 6 engines × 8/day | 2,400       | ~1.8 GB       | ~8 days      |
+| 50 prompts × 7 engines × 8/day | 2,800       | ~2.1 GB       | ~7 days      |
 
 Deleting a result cascades to its derived rows, so a retention policy
 needs no extra step.
 
-The same workloads use under 1%, 1% and 7% of Vercel's free monthly
+The same workloads use under 1%, 1% and 8% of Vercel's free monthly
 function invocations, so the compute side stays free throughout.
 
 Past light usage, schedule the retention query in
