@@ -6,6 +6,7 @@ export const ENGINES = [
   "bing-aimode",
   "google",
   "google-news",
+  "bing",
 ] as const;
 
 export type Engine = (typeof ENGINES)[number];
@@ -26,23 +27,28 @@ const TASK_TYPES: Record<Engine, string> = {
   "bing-aimode": "BING_AIMODE",
   google: "GOOGLE",
   "google-news": "GOOGLE_NEWS",
+  bing: "BING",
 };
 
-// Google engines take a `query` field; AI engines take `prompt`.
-const QUERY_ENGINES: ReadonlySet<Engine> = new Set(["google", "google-news"]);
+// The search engines take a `query` field; AI engines take `prompt`.
+const QUERY_ENGINES: ReadonlySet<Engine> = new Set([
+  "google",
+  "google-news",
+  "bing",
+]);
 
 export function toTaskType(engine: Engine): string {
   return TASK_TYPES[engine];
 }
 
-// cloro returns the AI Overview of a Google search only when the request
-// asks for it, and charges 2 credits more for it.
+// cloro returns the AI Overview of a Google or Bing search only when the
+// request asks for it, and charges 2 credits more for it.
 export function buildPayload(
   engine: Engine,
   prompt: string,
   country: string,
 ): Record<string, unknown> {
-  if (engine === "google") {
+  if (engine === "google" || engine === "bing") {
     return { query: prompt, country, include: { aioverview: true } };
   }
   return QUERY_ENGINES.has(engine)

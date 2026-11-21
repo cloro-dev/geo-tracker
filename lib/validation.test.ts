@@ -35,7 +35,7 @@ describe("createPromptSchema", () => {
       createPromptSchema.safeParse({ ...valid, engines: [] }).success,
     ).toBe(false);
     expect(
-      createPromptSchema.safeParse({ ...valid, engines: ["bing"] }).success,
+      createPromptSchema.safeParse({ ...valid, engines: ["yahoo"] }).success,
     ).toBe(false);
   });
 

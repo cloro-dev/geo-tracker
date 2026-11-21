@@ -12,6 +12,7 @@ describe("toTaskType", () => {
   it("converts the hyphenated slug to an underscored task type", () => {
     expect(toTaskType("google-news")).toBe("GOOGLE_NEWS");
     expect(toTaskType("bing-aimode")).toBe("BING_AIMODE");
+    expect(toTaskType("bing")).toBe("BING");
   });
 });
 
@@ -35,14 +36,16 @@ describe("buildPayload", () => {
     });
   });
 
-  // Without the flag cloro returns no AI Overview, and every Google result
-  // counts as an answer that names no brand.
-  it("asks google for the AI Overview", () => {
-    expect(buildPayload("google", "crm tools", "GB")).toEqual({
-      query: "crm tools",
-      country: "GB",
-      include: { aioverview: true },
-    });
+  // Without the flag cloro returns no AI Overview, and every Google or Bing
+  // result counts as an answer that names no brand.
+  it("asks google and bing for the AI Overview", () => {
+    for (const engine of ["google", "bing"] as const) {
+      expect(buildPayload(engine, "crm tools", "GB")).toEqual({
+        query: "crm tools",
+        country: "GB",
+        include: { aioverview: true },
+      });
+    }
   });
 
   it("never sends both fields", () => {
@@ -57,7 +60,8 @@ describe("isEngine", () => {
   it("accepts known slugs and rejects everything else", () => {
     expect(isEngine("gemini")).toBe(true);
     expect(isEngine("bing-aimode")).toBe(true);
-    expect(isEngine("bing")).toBe(false);
+    expect(isEngine("bing")).toBe(true);
+    expect(isEngine("bing-search")).toBe(false);
     expect(isEngine("grok")).toBe(false);
     expect(isEngine("copilot")).toBe(false);
     expect(isEngine("perplexity")).toBe(false);

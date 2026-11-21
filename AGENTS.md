@@ -104,8 +104,9 @@ goes to a third party. `lib/webhooks.ts` sends an HMAC of the secret so a
 leaked URL cannot be replayed against the API. Do not put the secret in a
 URL.
 
-**Google engines use a different field.** `google` and `google-news` send
-`query`; every other engine sends `prompt`. `lib/engines.ts` owns this.
+**Search engines use a different field.** `google`, `google-news` and
+`bing` send `query`; every other engine sends `prompt`. `lib/engines.ts`
+owns this.
 
 **Route handlers run on Node.** `pg` needs sockets, so any route that
 touches the database keeps `export const runtime = "nodejs"`.

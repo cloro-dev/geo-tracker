@@ -60,7 +60,14 @@ const PROMPTS = [
   "which CRM integrates with Slack",
 ];
 
-const ENGINES = ["chatgpt", "gemini", "aimode", "bing-aimode", "google"];
+const ENGINES = [
+  "chatgpt",
+  "gemini",
+  "aimode",
+  "bing-aimode",
+  "google",
+  "bing",
+];
 
 // Third-party pages the engines cite. Two are strong (cited constantly),
 // the rest thin out — a realistic long tail for "pages to get listed on".
@@ -92,8 +99,9 @@ const MENTION_RATE = {
   gemini: { Acme: 0.3, Globex: 0.75, Initech: 0.15, Umbrella: 0 },
   aimode: { Acme: 0.4, Globex: 0.6, Initech: 0.25, Umbrella: 0 },
   "bing-aimode": { Acme: 0.35, Globex: 0.5, Initech: 0.3, Umbrella: 0 },
-  // Google writes prose only when an AI Overview was served.
+  // Google and Bing write prose only when an AI Overview was served.
   google: { Acme: 0.25, Globex: 0.4, Initech: 0.1, Umbrella: 0 },
+  bing: { Acme: 0.2, Globex: 0.35, Initech: 0.15, Umbrella: 0 },
 };
 
 /**
@@ -191,7 +199,7 @@ function queryFanOut(query) {
 function buildResponse(engine, query, named, alsoCited, promptIndex) {
   const sources = sourceList(named, alsoCited, promptIndex);
 
-  if (engine !== "google") {
+  if (engine !== "google" && engine !== "bing") {
     const fanOut = queryFanOut(query);
     return {
       success: true,
@@ -212,9 +220,10 @@ function buildResponse(engine, query, named, alsoCited, promptIndex) {
     };
   }
 
-  // Google is a page of links, not an answer. An AI Overview appears on
-  // roughly half of them; the rest have no prose at all, and a brand
-  // genuinely cannot be "named in the answer" there.
+  // Google and Bing return a page of links, not an answer. An AI Overview
+  // appears on roughly half of them; the rest have no prose at all, and a
+  // brand genuinely cannot be "named in the answer" there. Bing returns no
+  // People also ask and no related searches.
   const hasOverview = random() < 0.5;
   return {
     success: true,
@@ -228,16 +237,20 @@ function buildResponse(engine, query, named, alsoCited, promptIndex) {
       aioverview: hasOverview
         ? { text: answerProse(query, named), sources: sources.slice(0, 4) }
         : null,
-      peopleAlsoAsk: [
-        {
-          question: `What is the best ${query}?`,
-          link: "https://g2.com/categories/crm",
-          title: "Category overview",
-        },
-      ],
-      relatedSearches: [
-        { query: `${query} pricing`, link: "https://google.com/search" },
-      ],
+      ...(engine === "google"
+        ? {
+            peopleAlsoAsk: [
+              {
+                question: `What is the best ${query}?`,
+                link: "https://g2.com/categories/crm",
+                title: "Category overview",
+              },
+            ],
+            relatedSearches: [
+              { query: `${query} pricing`, link: "https://google.com/search" },
+            ],
+          }
+        : {}),
     },
   };
 }
