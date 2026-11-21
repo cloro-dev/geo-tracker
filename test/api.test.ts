@@ -142,7 +142,7 @@ describe.skipIf(!hasDatabase)("API routes (need a database)", () => {
       const res = await promptsPost(
         authed("/api/prompts", {
           method: "POST",
-          body: JSON.stringify({ name: "x", prompt: "y", engines: ["bing"] }),
+          body: JSON.stringify({ name: "x", prompt: "y", engines: ["yahoo"] }),
         }),
         params(""),
       );
