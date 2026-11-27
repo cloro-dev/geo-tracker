@@ -1,0 +1,25 @@
+name: Dependabot auto-merge
+
+# Turns on auto-merge for each Dependabot PR that is a minor or patch update,
+# security fixes included. GitHub merges the PR when the `check` job of ci.yml passes.
+# A major update stays open for a person to read and merge.
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      - id: metadata
+        uses: dependabot/fetch-metadata@v3
+      # For a grouped PR, update-type is the largest change in the group. An
+      # empty or unknown update-type does not merge.
+      - if: contains(fromJSON('["version-update:semver-minor", "version-update:semver-patch"]'), steps.metadata.outputs.update-type)
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
